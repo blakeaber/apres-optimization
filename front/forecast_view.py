@@ -37,12 +37,15 @@ def get_forecast_data(market, start_date, end_date):
 
 layout = [
     html.Div(
-        [
-            dcc.Dropdown(markets_list, markets_list[0], id="markets-dropdown"),
+        style={"display": "inline-block"},
+        children=[
+            dcc.Dropdown(
+                markets_list, markets_list[0], id="markets-dropdown", clearable=False
+            ),
             dcc.DatePickerRange(
                 id="forecast-date-range",
             ),
-        ]
+        ],
     ),
     html.Div([dcc.Graph(id="forecast-chart")]),
 ]
