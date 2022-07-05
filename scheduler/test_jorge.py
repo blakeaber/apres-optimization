@@ -8,11 +8,12 @@ def compute_schedule(payload: dict):
     num_hours = 24
     num_minutes = 60
     minutes_interval = 15
-    num_drivers = 2
+    num_drivers = 3
     min_duration = 4 * 60  # hour * minutes
     max_duration = 10 * 60  # hour * minutes
     duration_step = 15  # minutes
     cost_driver_per_hour = 13.5
+    cost_driver_per_minute = cost_driver_per_hour / 60
     revenue_passenger = 13.5
 
     # The states is [day, start_hour, start_minute, end_hour, end_minute, driver_id, shift_hours]
@@ -125,49 +126,59 @@ def compute_schedule(payload: dict):
                     assigned_shifts[(driver, duration)].Not()
                 )
 
-    # Maximize: La demanda por hora debe suplirse con el numero de drivers
-    demand = [10] * num_hours
+    # Input: demand
+    demand = {
+        (day, hour, minute): 1
+        for day in all_days
+        for hour in all_hours
+        for minute in all_minutes
+    }
 
-    def _get_drivers_in_hour(day, hour):
+    def _get_drivers_in_time(day, hour, minute):
+        """Return the number of drivers for a given timestamp"""
         return sum(
             shifts_state[
                 (
                     day,
                     hour,
-                    s_minute,
+                    minute,
                     driver,
                     duration,
                 )
             ]
-            for s_minute in all_minutes
             for driver in all_drivers
             for duration in all_duration
         )
 
-    # model.Maximize(
-    #     sum(
-    #         (demand[hour] - _get_drivers_in_hour(day, hour)) * revenue_passenger
-    #         - _get_drivers_in_hour(day, hour) * cost_driver_per_hour
-    #         for day in all_days
-    #         for hour in all_hours
-    #     )
-    # )
-    model.Minimize(
-        sum(
-            shifts_state[
-                (
-                    day,
-                    hour,
-                    s_minute,
-                    driver,
-                    duration,
+    # Auxiliary variable to define completion_rate,
+    # The completion rate is the min between demand and drivers
+    completion_rate = {
+        (day, hour, minute): model.NewIntVar(
+            0, num_drivers, f"completion_rate_d{day}_h{hour}_m{minute}"
+        )
+        for day in all_days
+        for hour in all_hours
+        for minute in all_minutes
+    }
+    for day in all_days:
+        for hour in all_hours:
+            for minute in all_minutes:
+                model.AddMinEquality(
+                    completion_rate[(day, hour, minute)],
+                    [
+                        demand[(day, hour, minute)],
+                        _get_drivers_in_time(day, hour, minute),
+                    ],
                 )
-            ]
+
+    # Maximize the revenue (completion_rate*revenue - occupancy*cost = completion_rate * revenue_per_passenger - activer_driver * cost_per_driver)
+    model.Maximize(
+        sum(
+            completion_rate[(day, hour, minute)] * revenue_passenger
+            - _get_drivers_in_time(day, hour, minute) * cost_driver_per_minute
             for day in all_days
             for hour in all_hours
-            for s_minute in all_minutes
-            for driver in all_drivers
-            for duration in all_duration
+            for minute in all_minutes
         )
     )
 
@@ -194,7 +205,7 @@ def compute_schedule(payload: dict):
                                     ]
                                 )
                                 == 1
-                            ) and (driver == 0):
+                            ):
                                 print(
                                     "day",
                                     day,
