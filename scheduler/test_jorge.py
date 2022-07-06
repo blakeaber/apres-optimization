@@ -1,8 +1,8 @@
-from math import ceil
+import time
 from ortools.sat.python import cp_model
 
 
-def negated_bounded_span(shifts, start, length):
+def _negated_bounded_span(shifts, start, length):
     """From: https://github.com/google/or-tools/blob/master/examples/python/shift_scheduling_sat.py#L29
     Filters an isolated sub-sequence of variables assigned to True.
     Extract the span of Boolean variables [start, start + length), negate them,
@@ -28,63 +28,16 @@ def negated_bounded_span(shifts, start, length):
     return sequence
 
 
-def compute_schedule(payload: dict):
-    # Constants
-    num_days = 1
-    num_hours = 24
-    num_minutes = 60
-    minutes_interval = 15
-    num_drivers = 3
-    min_duration = 4 * 60  # hour * minutes
-    max_duration = 10 * 60  # hour * minutes
-    duration_step = 15  # minutes
-    cost_driver_per_hour = 13.5
-    cost_driver_per_minute = cost_driver_per_hour / 60
-    revenue_passenger = 13.5
-
-    # The states is [day, start_hour, start_minute, end_hour, end_minute, driver_id, shift_hours]
-    # Ranges (for simplicity)
-    all_days = range(num_days)
-    all_hours = range(num_hours)
-    all_minutes = range(0, num_minutes, minutes_interval)
-    all_drivers = range(num_drivers)
-    all_duration = range(min_duration, max_duration, duration_step)
-
-    model = cp_model.CpModel()
-
-    # Define all states
-    shifts_state = {}
-    for day in all_days:
-        for s_hour in all_hours:
-            for s_minute in all_minutes:
-                for driver in all_drivers:
-                    for duration in all_duration:
-                        shifts_state[
-                            (
-                                day,
-                                s_hour,
-                                s_minute,
-                                driver,
-                                duration,
-                            )
-                        ] = model.NewBoolVar(
-                            "shift_day_%i_sH_%i_sM_%i_driver_%i_duration_%d"
-                            % (
-                                day,
-                                s_hour,
-                                s_minute,
-                                driver,
-                                duration,
-                            )
-                        )
-    # Auxiliary variable to track if a shift was assigned
-    assigned_shifts = {
-        (driver, duration): model.NewBoolVar(f"selected_shift_{duration}")
-        for driver in all_drivers
-        for duration in all_duration
-    }
-
-    # Constraint: A driver can only be assigned to a shift per day
+def _constraint_one_shift_per_day(
+    model,
+    shifts_state,
+    assigned_shifts,
+    all_days,
+    all_hours,
+    all_minutes,
+    all_drivers,
+    all_duration,
+):
     for day in all_days:
         for driver in all_drivers:
             for duration in all_duration:
@@ -124,10 +77,18 @@ def compute_schedule(payload: dict):
                 assigned_shifts[(driver, duration)] for duration in all_duration
             )
 
-    # DEBUG
-    model.Add(shifts_state[(0, 4, 0, 0, 300)] == 1)
 
-    # Constraint: The sum of assigned minutes should be at least as the shift duration or 0
+def _constraint_shift_minimum_duration(
+    model,
+    shifts_state,
+    assigned_shifts,
+    all_days,
+    all_hours,
+    all_minutes,
+    all_drivers,
+    all_duration,
+    minutes_interval,
+):
     for day in all_days:
         for driver in all_drivers:
             for duration in all_duration:
@@ -152,8 +113,18 @@ def compute_schedule(payload: dict):
                     assigned_shifts[(driver, duration)].Not()
                 )
 
-    # Constraint: Shifts must expand in a continous window
-    # in other words, do not allow smaller shifts
+
+def _constraint_shifts_contiguous(
+    model,
+    shifts_state,
+    assigned_shifts,
+    all_days,
+    all_hours,
+    all_minutes,
+    all_drivers,
+    all_duration,
+    minutes_interval,
+):
     for driver in all_drivers:
         for duration in all_duration:
             num_slots = int(duration / minutes_interval)
@@ -174,7 +145,123 @@ def compute_schedule(payload: dict):
             # Do not allow smaller slots
             for length in range(1, num_slots):
                 for start in range(len(shifts) - length + 1):
-                    model.AddBoolOr(negated_bounded_span(shifts, start, length))
+                    model.AddBoolOr(_negated_bounded_span(shifts, start, length))
+
+
+"""
+Constraints:
+- [x] Shift duration
+- [x] Number of drivers (same as number of vehicles?)
+- [x] A driver can only be assigned to one shift per day
+- [x] The sum of assigned time must be at least of the shift duration
+- [x] The assigned shift slots must be consecutive
+- [] Minimum shifts per hour
+- [] Max amount of shifts that can start/end per minute slot
+- [] Don't end during rush hours
+- [] Assume callouts
+"""
+
+
+def compute_schedule(payload: dict):
+    # Constants
+    num_days = 1
+    num_hours = 24
+    num_minutes = 60
+    minutes_interval = 15
+    num_drivers = 3
+    min_duration = 4 * 60  # hour * minutes
+    max_duration = 10 * 60  # hour * minutes
+    duration_step = 15  # minutes
+    cost_driver_per_hour = 13.5
+    cost_driver_per_minute = cost_driver_per_hour / 60
+    revenue_passenger = 13.5
+
+    # The states is [day, start_hour, start_minute, end_hour, end_minute, driver_id, shift_hours]
+    # Ranges (for simplicity)
+    all_days = range(num_days)
+    all_hours = range(num_hours)
+    all_minutes = range(0, num_minutes, minutes_interval)
+    all_drivers = range(num_drivers)
+    all_duration = range(min_duration, max_duration, duration_step)
+
+    model = cp_model.CpModel()
+
+    print("Defining variables and constraints")
+    t0 = time.time()
+
+    # Define all states
+    shifts_state = {}
+    for day in all_days:
+        for s_hour in all_hours:
+            for s_minute in all_minutes:
+                for driver in all_drivers:
+                    for duration in all_duration:
+                        shifts_state[
+                            (
+                                day,
+                                s_hour,
+                                s_minute,
+                                driver,
+                                duration,
+                            )
+                        ] = model.NewBoolVar(
+                            "shift_day_%i_sH_%i_sM_%i_driver_%i_duration_%d"
+                            % (
+                                day,
+                                s_hour,
+                                s_minute,
+                                driver,
+                                duration,
+                            )
+                        )
+    # Auxiliary variable to track if a shift was assigned
+    assigned_shifts = {
+        (driver, duration): model.NewBoolVar(f"selected_shift_{duration}")
+        for driver in all_drivers
+        for duration in all_duration
+    }
+
+    # Constraint: A driver can only be assigned to a shift per day
+    _constraint_one_shift_per_day(
+        model,
+        shifts_state,
+        assigned_shifts,
+        all_days,
+        all_hours,
+        all_minutes,
+        all_drivers,
+        all_duration,
+    )
+
+    # DEBUG
+    model.Add(shifts_state[(0, 4, 0, 0, 300)] == 1)
+
+    # Constraint: The sum of assigned minutes should be at least as the shift duration or 0
+    _constraint_shift_minimum_duration(
+        model,
+        shifts_state,
+        assigned_shifts,
+        all_days,
+        all_hours,
+        all_minutes,
+        all_drivers,
+        all_duration,
+        minutes_interval,
+    )
+
+    # Constraint: Shifts must expand in a continous window
+    # in other words, do not allow smaller shifts
+    _constraint_shifts_contiguous(
+        model,
+        shifts_state,
+        assigned_shifts,
+        all_days,
+        all_hours,
+        all_minutes,
+        all_drivers,
+        all_duration,
+        minutes_interval,
+    )
 
     # Input: demand
     demand = {
@@ -199,6 +286,10 @@ def compute_schedule(payload: dict):
             for driver in all_drivers
             for duration in all_duration
         )
+
+    print("\t Time:", round(time.time() - t0, 2), "seconds")
+    print("Defining objective function")
+    t0 = time.time()
 
     # Auxiliary variable to define completion_rate,
     # The completion rate is the min between demand and drivers
@@ -232,8 +323,14 @@ def compute_schedule(payload: dict):
         )
     )
 
+    print("\t Time:", round(time.time() - t0, 2), "seconds")
+    print("Solving problem")
+    to = time.time()
+
     solver = cp_model.CpSolver()
     status = solver.Solve(model)
+
+    print("\t Time:", round(time.time() - t0, 2), "seconds")
 
     if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
         print(f"Maximum of objective function: {solver.ObjectiveValue()}\n")
@@ -283,7 +380,7 @@ def test():
 
     # 1 pair - 2 var
     for i in range(1):
-        model.AddBoolOr(negated_bounded_span([a, b], i, 2))
+        model.AddBoolOr(_negated_bounded_span([a, b], i, 2))
     # model.AddBoolOr([a, b])
     # model.AddBoolOr([a.Not(), b.Not()])
 
