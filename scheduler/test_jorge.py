@@ -2,6 +2,32 @@ from math import ceil
 from ortools.sat.python import cp_model
 
 
+def negated_bounded_span(shifts, start, length):
+    """From: https://github.com/google/or-tools/blob/master/examples/python/shift_scheduling_sat.py#L29
+    Filters an isolated sub-sequence of variables assigned to True.
+    Extract the span of Boolean variables [start, start + length), negate them,
+    and if there is variables to the left/right of this span, surround the span by
+    them in non negated form.
+    Args:
+        shifts: a list of shifts to extract the span from.
+        start: the start to the span.
+        length: the length of the span.
+    Returns:
+        a list of variables which conjunction will be false if the sub-list is
+        assigned to True, and correctly bounded by variables assigned to False,
+        or by the start or end of works.
+    """
+    sequence = []
+    # Left border (start of works, or works[start - 1])
+    if start > 0:
+        sequence.append(shifts[start - 1])
+    sequence.extend(shifts[start + i].Not() for i in range(length))
+    # Right border (end of works or works[start + length])
+    if start + length < len(shifts):
+        sequence.append(shifts[start + length])
+    return sequence
+
+
 def compute_schedule(payload: dict):
     # Constants
     num_days = 1
@@ -58,7 +84,7 @@ def compute_schedule(payload: dict):
         for duration in all_duration
     }
 
-    # A driver can only be assigned to a shift per day
+    # Constraint: A driver can only be assigned to a shift per day
     for day in all_days:
         for driver in all_drivers:
             for duration in all_duration:
@@ -101,7 +127,7 @@ def compute_schedule(payload: dict):
     # DEBUG
     model.Add(shifts_state[(0, 4, 0, 0, 300)] == 1)
 
-    # The sum of assigned minutes should be at least as the shift duration or 0
+    # Constraint: The sum of assigned minutes should be at least as the shift duration or 0
     for day in all_days:
         for driver in all_drivers:
             for duration in all_duration:
@@ -125,6 +151,30 @@ def compute_schedule(payload: dict):
                 model.Add(sum(num_slots_worked) == 0).OnlyEnforceIf(
                     assigned_shifts[(driver, duration)].Not()
                 )
+
+    # Constraint: Shifts must expand in a continous window
+    # in other words, do not allow smaller shifts
+    for driver in all_drivers:
+        for duration in all_duration:
+            num_slots = int(duration / minutes_interval)
+            shifts = [
+                shifts_state[
+                    (
+                        day,
+                        hour,
+                        minute,
+                        driver,
+                        duration,
+                    )
+                ]
+                for day in all_days
+                for hour in all_hours
+                for minute in all_minutes
+            ]
+            # Do not allow smaller slots
+            for length in range(1, num_slots):
+                for start in range(len(shifts) - length + 1):
+                    model.AddBoolOr(negated_bounded_span(shifts, start, length))
 
     # Input: demand
     demand = {
@@ -220,6 +270,46 @@ def compute_schedule(payload: dict):
                                 )
     else:
         print("No solution found.")
+
+
+def test():
+    model = cp_model.CpModel()
+    solver = cp_model.CpSolver()
+    status = solver.Solve(model)
+
+    a = model.NewBoolVar("a")
+    b = model.NewBoolVar("b")
+    # c = model.NewBoolVar("c")
+
+    # 1 pair - 2 var
+    for i in range(1):
+        model.AddBoolOr(negated_bounded_span([a, b], i, 2))
+    # model.AddBoolOr([a, b])
+    # model.AddBoolOr([a.Not(), b.Not()])
+
+    # 2 pair - 2 var
+    # model.AddBoolOr([a, b.Not()])
+    # model.AddBoolOr([a, b])
+    # model.AddBoolOr([a.Not(), b])
+
+    # 1 pair - 3 var
+    # model.AddBoolOr([a, b, c])
+    # model.AddBoolOr([a.Not(), b.Not(), c.Not()])
+
+    class SolutionCollector(cp_model.CpSolverSolutionCallback):
+        def __init__(self, variables):
+            cp_model.CpSolverSolutionCallback.__init__(self)
+            self.__variables = variables
+            self.solution_list = []
+
+        def on_solution_callback(self):
+            self.solution_list.append([self.Value(v) for v in self.__variables])
+
+    solution_collector = SolutionCollector([a, b])
+    solver.SearchForAllSolutions(model, solution_collector)
+
+    print(*solution_collector.solution_list, sep="\n")
+    print(len(solution_collector.solution_list))
 
 
 if __name__ == "__main__":
