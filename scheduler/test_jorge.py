@@ -73,7 +73,7 @@ def _constraint_one_shift_per_day(
                     )
                     == 0
                 ).OnlyEnforceIf(assigned_shifts[(driver, duration)].Not())
-            model.AddExactlyOne(
+            model.AddAtMostOne(
                 assigned_shifts[(driver, duration)] for duration in all_duration
             )
 
@@ -107,7 +107,7 @@ def _constraint_shift_minimum_duration(
                             ]
                         )
                 model.Add(
-                    (sum(num_slots_worked) * minutes_interval) >= duration
+                    (sum(num_slots_worked) * minutes_interval) == duration
                 ).OnlyEnforceIf(assigned_shifts[(driver, duration)])
                 model.Add(sum(num_slots_worked) == 0).OnlyEnforceIf(
                     assigned_shifts[(driver, duration)].Not()
@@ -145,7 +145,9 @@ def _constraint_shifts_contiguous(
             # Do not allow smaller slots
             for length in range(1, num_slots):
                 for start in range(len(shifts) - length + 1):
-                    model.AddBoolOr(_negated_bounded_span(shifts, start, length))
+                    model.AddBoolOr(
+                        _negated_bounded_span(shifts, start, length)
+                    ).OnlyEnforceIf(assigned_shifts[(driver, duration)])
 
 
 """
@@ -168,7 +170,7 @@ def compute_schedule(payload: dict):
     num_hours = 24
     num_minutes = 60
     minutes_interval = 15
-    num_drivers = 3
+    num_drivers = 2
     min_duration = 4 * 60  # hour * minutes
     max_duration = 10 * 60  # hour * minutes
     duration_step = 15  # minutes
@@ -216,9 +218,28 @@ def compute_schedule(payload: dict):
                         )
     # Auxiliary variable to track if a shift was assigned
     assigned_shifts = {
-        (driver, duration): model.NewBoolVar(f"selected_shift_{duration}")
+        (driver, duration): model.NewBoolVar(f"selected_shift_driv{driver}_d{duration}")
         for driver in all_drivers
         for duration in all_duration
+    }
+    # Auxiliary variable to track when a shift starts & ends
+    shifts_start = {
+        (driver, day, hour, minute): model.NewBoolVar(
+            f"shift_start_driv_{driver}_d{day}_h{hour}_m{minute}"
+        )
+        for driver in all_drivers
+        for day in all_days
+        for hour in all_hours
+        for minute in all_minutes
+    }
+    shifts_end = {
+        (driver, day, hour, minute): model.NewBoolVar(
+            f"shift_end_d{day}_h{hour}_m{minute}"
+        )
+        for driver in all_drivers
+        for day in all_days
+        for hour in all_hours
+        for minute in all_minutes
     }
 
     # Constraint: A driver can only be assigned to a shift per day
@@ -263,9 +284,107 @@ def compute_schedule(payload: dict):
         minutes_interval,
     )
 
+    # # Constraint 6: Max amount of shifts that can start/end at the same time
+    # # Populate auxiliary variables
+    # for driver in all_drivers:
+    #     for day in all_days:
+    #         for duration in all_duration:
+    #             for hour in all_hours:
+    #                 for minute in all_minutes:
+    #                     if (hour == 0) and (minute == 0):
+    #                         model.AddBoolAnd(
+    #                             [
+    #                                 shifts_state[
+    #                                     (
+    #                                         day,
+    #                                         hour,
+    #                                         minute,
+    #                                         driver,
+    #                                         duration,
+    #                                     )
+    #                                 ],
+    #                                 shifts_state[
+    #                                     (
+    #                                         day,
+    #                                         hour,
+    #                                         minute + minutes_interval,
+    #                                         driver,
+    #                                         duration,
+    #                                     )
+    #                                 ],
+    #                             ]
+    #                         ).OnlyEnforceIf(
+    #                             shifts_start[(driver, day, hour, minute)],
+    #                             assigned_shifts[(driver, duration)],
+    #                         )
+    #                     else:
+    #                         if minute == 0:
+    #                             model.AddBoolAnd(
+    #                                 [
+    #                                     shifts_state[
+    #                                         (
+    #                                             day,
+    #                                             hour,
+    #                                             minute,
+    #                                             driver,
+    #                                             duration,
+    #                                         )
+    #                                     ],
+    #                                     shifts_state[
+    #                                         (
+    #                                             day,
+    #                                             hour - 1,
+    #                                             60 - minutes_interval,
+    #                                             driver,
+    #                                             duration,
+    #                                         )
+    #                                     ].Not(),
+    #                                 ]
+    #                             ).OnlyEnforceIf(
+    #                                 [
+    #                                     shifts_start[(driver, day, hour, minute)],
+    #                                     assigned_shifts[(driver, duration)],
+    #                                 ]
+    #                             )
+    #                         else:
+    #                             model.AddBoolAnd(
+    #                                 [
+    #                                     shifts_state[
+    #                                         (
+    #                                             day,
+    #                                             hour,
+    #                                             minute,
+    #                                             driver,
+    #                                             duration,
+    #                                         )
+    #                                     ],
+    #                                     shifts_state[
+    #                                         (
+    #                                             day,
+    #                                             hour,
+    #                                             minute - minutes_interval,
+    #                                             driver,
+    #                                             duration,
+    #                                         )
+    #                                     ].Not(),
+    #                                 ]
+    #                             ).OnlyEnforceIf(
+    #                                 [
+    #                                     shifts_start[(driver, day, hour, minute)],
+    #                                     assigned_shifts[(driver, duration)],
+    #                                 ]
+    #                             )
+    #                         model.Add(
+    #                             shifts_start[(driver, day, hour, minute)] == 0
+    #                         ).OnlyEnforceIf(
+    #                             [
+    #                                 assigned_shifts[(driver, duration)].Not(),
+    #                             ]
+    #                         )
+
     # Input: demand
     demand = {
-        (day, hour, minute): 1
+        (day, hour, minute): 1 if hour < 12 else 0
         for day in all_days
         for hour in all_hours
         for minute in all_minutes
@@ -325,7 +444,7 @@ def compute_schedule(payload: dict):
 
     print("\t Time:", round(time.time() - t0, 2), "seconds")
     print("Solving problem")
-    to = time.time()
+    t0 = time.time()
 
     solver = cp_model.CpSolver()
     status = solver.Solve(model)
@@ -364,6 +483,29 @@ def compute_schedule(payload: dict):
                                     driver,
                                     "Duration",
                                     duration,
+                                    "SHIFT_START",
+                                    solver.Value(
+                                        shifts_start[
+                                            (
+                                                driver,
+                                                day,
+                                                s_hour,
+                                                s_minute,
+                                            )
+                                        ]
+                                    ),
+                                    "REAL",
+                                    solver.Value(
+                                        shifts_state[
+                                            (
+                                                day,
+                                                s_hour,
+                                                s_minute,
+                                                driver,
+                                                duration,
+                                            )
+                                        ]
+                                    ),
                                 )
     else:
         print("No solution found.")
