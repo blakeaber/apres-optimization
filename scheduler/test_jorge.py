@@ -357,6 +357,18 @@ def _constraint_max_starts_and_ends(
                 model.Add(ends <= max_ends_per_slot)
 
 
+def _constraint_rush_hours(
+    model, shifts_end, rush_hour, all_drivers, all_days, all_hours, all_minutes
+):
+    for driver in all_drivers:
+        for day in all_days:
+            for hour in all_hours:
+                for minute in all_minutes:
+                    model.Add(
+                        shifts_end[(driver, day, hour, minute)] == 0
+                    ).OnlyEnforceIf(rush_hour[(hour, minute)])
+
+
 """
 Constraints:
 - [x] Shift duration
@@ -394,6 +406,11 @@ def compute_schedule(payload: dict):
     all_minutes = range(0, num_minutes, minutes_interval)
     all_drivers = range(num_drivers)
     all_duration = range(min_duration, max_duration, duration_step)
+
+    rush_hour_input = {}
+    for hour in all_hours:
+        for minute in all_minutes:
+            rush_hour_input[(hour, minute)] = 1 if hour in {6, 7, 8, 9, 11} else 0
 
     model = cp_model.CpModel()
 
@@ -450,6 +467,14 @@ def compute_schedule(payload: dict):
         for hour in all_hours
         for minute in all_minutes
     }
+    # Auxiliary variable to track if we are in a rush hour
+    rush_hour = {}
+    for hour in all_hours:
+        for minute in all_minutes:
+            var = model.NewBoolVar(f"rush_hour_h{hour}_d{day}")
+            rush_hour[(hour, minute)] = var
+            if rush_hour_input[(hour, minute)]:
+                model.Add(var == 1)
 
     # Constraint: A driver can only be assigned to a shift per day
     _constraint_one_shift_per_day(
@@ -521,6 +546,11 @@ def compute_schedule(payload: dict):
         all_drivers,
         max_starts_per_slot,
         max_ends_per_slot,
+    )
+
+    # Constraint 7: DO not end during rush hours
+    _constraint_rush_hours(
+        model, shifts_end, rush_hour, all_drivers, all_days, all_hours, all_minutes
     )
 
     # Input: demand
