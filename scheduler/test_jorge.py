@@ -150,7 +150,7 @@ def _constraint_shifts_contiguous(
                     ).OnlyEnforceIf(assigned_shifts[(driver, duration)])
 
 
-def _constraint_shift_start_and_Shift_end(
+def _constraint_shift_start_and_shift_end(
     model,
     shifts_state,
     shifts_start,
@@ -317,6 +317,46 @@ def _constraint_shift_start_and_Shift_end(
                                 )
 
 
+def _constraint_max_starts_and_ends(
+    model,
+    shifts_start,
+    shifts_end,
+    all_days,
+    all_hours,
+    all_minutes,
+    all_drivers,
+    max_starts_per_slot,
+    max_ends_per_slot,
+):
+    for day in all_days:
+        for hour in all_hours:
+            for minute in all_minutes:
+                starts = sum(
+                    shifts_start[
+                        (
+                            driver,
+                            day,
+                            hour,
+                            minute,
+                        )
+                    ]
+                    for driver in all_drivers
+                )
+                ends = sum(
+                    shifts_end[
+                        (
+                            driver,
+                            day,
+                            hour,
+                            minute,
+                        )
+                    ]
+                    for driver in all_drivers
+                )
+                model.Add(starts <= max_starts_per_slot)
+                model.Add(ends <= max_ends_per_slot)
+
+
 """
 Constraints:
 - [x] Shift duration
@@ -325,7 +365,7 @@ Constraints:
 - [x] The sum of assigned time must be at least of the shift duration
 - [x] The assigned shift slots must be consecutive
 - [] Minimum shifts per hour
-- [] Max amount of shifts that can start/end per minute slot
+- [x] Max amount of shifts that can start/end per minute slot
 - [] Don't end during rush hours
 - [] Assume callouts
 """
@@ -344,6 +384,8 @@ def compute_schedule(payload: dict):
     cost_driver_per_hour = 13.5
     cost_driver_per_minute = cost_driver_per_hour / 60
     revenue_passenger = 13.5
+    max_starts_per_slot = 1  # 4
+    max_ends_per_slot = 1  # 4
 
     # The states is [day, start_hour, start_minute, end_hour, end_minute, driver_id, shift_hours]
     # Ranges (for simplicity)
@@ -453,7 +495,7 @@ def compute_schedule(payload: dict):
 
     # # Constraint 6: Max amount of shifts that can start/end at the same time
     # Populate auxiliary variables
-    _constraint_shift_start_and_Shift_end(
+    _constraint_shift_start_and_shift_end(
         model,
         shifts_state,
         shifts_start,
@@ -467,6 +509,18 @@ def compute_schedule(payload: dict):
         num_days,
         num_hours,
         num_minutes,
+    )
+    # Add max starts & ends constraint
+    _constraint_max_starts_and_ends(
+        model,
+        shifts_start,
+        shifts_end,
+        all_days,
+        all_hours,
+        all_minutes,
+        all_drivers,
+        max_starts_per_slot,
+        max_ends_per_slot,
     )
 
     # Input: demand
