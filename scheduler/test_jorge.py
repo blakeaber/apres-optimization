@@ -46,7 +46,7 @@ def _get_drivers_in_time(shifts_state, day, hour, minute, all_drivers, all_durat
 
 
 def _constraint_one_shift_per_day(
-    model,
+    model: cp_model.CpModel,
     shifts_state,
     assigned_shifts,
     all_days,
@@ -58,21 +58,19 @@ def _constraint_one_shift_per_day(
     for day in all_days:
         for driver in all_drivers:
             for duration in all_duration:
-                model.Add(
-                    sum(
-                        shifts_state[
-                            (
-                                day,
-                                s_hour,
-                                s_minute,
-                                driver,
-                                duration,
-                            )
-                        ]
-                        for s_hour in all_hours
-                        for s_minute in all_minutes
-                    )
-                    > 0
+                # If the shift was assigned, the shifts_state that day must have at least one. 0 Otherwise
+                model.AddAtLeastOne(
+                    shifts_state[
+                        (
+                            day,
+                            s_hour,
+                            s_minute,
+                            driver,
+                            duration,
+                        )
+                    ]
+                    for s_hour in all_hours
+                    for s_minute in all_minutes
                 ).OnlyEnforceIf(assigned_shifts[(driver, duration)])
                 model.Add(
                     sum(
@@ -90,6 +88,7 @@ def _constraint_one_shift_per_day(
                     )
                     == 0
                 ).OnlyEnforceIf(assigned_shifts[(driver, duration)].Not())
+            # Only one type of assigned shift allowed (i.e. if 4h shift is chosen, no other shift duration can be set to 1)
             model.AddAtMostOne(
                 assigned_shifts[(driver, duration)] for duration in all_duration
             )
@@ -106,9 +105,10 @@ def _constraint_shift_minimum_duration(
     all_duration,
     minutes_interval,
 ):
-    for day in all_days:
-        for driver in all_drivers:
-            for duration in all_duration:
+    # The sum of time worked must be the same as duration
+    for driver in all_drivers:
+        for duration in all_duration:
+            for day in all_days:
                 num_slots_worked = []
                 for s_hour in all_hours:
                     for s_minute in all_minutes:
@@ -144,7 +144,9 @@ def _constraint_shifts_contiguous(
 ):
     for driver in all_drivers:
         for duration in all_duration:
+            # For each duration, compute the number of slots it spans
             num_slots = int(duration / minutes_interval)
+            # Get all the states for the corresponding duration
             shifts = [
                 shifts_state[
                     (
@@ -159,7 +161,7 @@ def _constraint_shifts_contiguous(
                 for hour in all_hours
                 for minute in all_minutes
             ]
-            # Do not allow smaller slots
+            # Do not allow smaller slots than num_slots Bigger slots will be constraint by the sum of durations
             for length in range(1, num_slots):
                 for start in range(len(shifts) - length + 1):
                     model.AddBoolOr(
@@ -186,11 +188,13 @@ def _constraint_shift_start_and_shift_end(
     for driver in all_drivers:
         for day in all_days:
             for duration in all_duration:
+                # Just one start per day
                 model.AddAtMostOne(
                     shifts_start[(driver, day, hour, minute)]
                     for hour in all_hours
                     for minute in all_minutes
                 )
+                # Just one end per day
                 model.AddAtMostOne(
                     shifts_end[(driver, day, hour, minute)]
                     for hour in all_hours
@@ -198,6 +202,9 @@ def _constraint_shift_start_and_shift_end(
                 )
                 for hour in all_hours:
                     for minute in all_minutes:
+                        # Handle conditions to define start and end shifts
+                        # Start: Previous 0 Current 1
+                        # End: Current 1 Next 0
                         if (day == 0) and (hour == 0) and (minute == 0):
                             model.Add(
                                 shifts_start[(driver, day, hour, minute)] == 1
@@ -345,6 +352,7 @@ def _constraint_max_starts_and_ends(
     max_starts_per_slot,
     max_ends_per_slot,
 ):
+    # The sum of starts and ends per slot can't be higher than the max
     for day in all_days:
         for hour in all_hours:
             for minute in all_minutes:
@@ -377,6 +385,7 @@ def _constraint_max_starts_and_ends(
 def _constraint_rush_hours(
     model, shifts_end, rush_hour, all_drivers, all_days, all_hours, all_minutes
 ):
+    # If rush hour, can't end the shifth at that slot
     for driver in all_drivers:
         for day in all_days:
             for hour in all_hours:
@@ -396,6 +405,7 @@ def _constraint_minimum_shifts_per_hour(
     all_minutes,
     all_duration,
 ):
+    # The sum of active drivers pero hour can't be smaller than the minimum specified shifts
     for day in all_days:
         for hour in all_hours:
             drivers = sum(
@@ -422,7 +432,7 @@ Constraints:
 
 
 def compute_schedule(payload: dict):
-    # Constants
+    # Inputs
     num_days = 1
     num_hours = 24
     num_minutes = 60
@@ -438,7 +448,7 @@ def compute_schedule(payload: dict):
     max_ends_per_slot = 1  # 4
 
     # The states is [day, start_hour, start_minute, end_hour, end_minute, driver_id, shift_hours]
-    # Ranges (for simplicity)
+    # Ranges (for the for-loops)
     all_days = range(num_days)
     all_hours = range(num_hours)
     all_minutes = range(0, num_minutes, minutes_interval)
@@ -455,6 +465,14 @@ def compute_schedule(payload: dict):
     for day in all_days:
         for hour in all_hours:
             minimum_shifts[(day, hour)] = 1 if hour in {15} else 0
+
+    # Demand
+    demand = {
+        (day, hour, minute): 1 if hour < 12 else 0
+        for day in all_days
+        for hour in all_hours
+        for minute in all_minutes
+    }
 
     model = cp_model.CpModel()
 
@@ -492,7 +510,7 @@ def compute_schedule(payload: dict):
         for driver in all_drivers
         for duration in all_duration
     }
-    # Auxiliary variable to track when a shift starts & ends
+    # Auxiliary variables to track when a shift starts & ends
     shifts_start = {
         (driver, day, hour, minute): model.NewBoolVar(
             f"shift_start_driv_{driver}_d{day}_h{hour}_m{minute}"
@@ -520,7 +538,7 @@ def compute_schedule(payload: dict):
             if rush_hour_input[(hour, minute)]:
                 model.Add(var == 1)
 
-    # Constraint: A driver can only be assigned to a shift per day
+    # Constraint 1: A driver can only be assigned to a shift per day
     _constraint_one_shift_per_day(
         model,
         shifts_state,
@@ -532,10 +550,10 @@ def compute_schedule(payload: dict):
         all_duration,
     )
 
-    # DEBUG
+    # DEBUG - Force driver to have shifht 300
     model.Add(shifts_state[(0, 4, 0, 0, 300)] == 1)
 
-    # Constraint: The sum of assigned minutes should be at least as the shift duration or 0
+    # Constraint 2: The sum of assigned minutes should be at least as the shift duration or 0
     _constraint_shift_minimum_duration(
         model,
         shifts_state,
@@ -548,7 +566,7 @@ def compute_schedule(payload: dict):
         minutes_interval,
     )
 
-    # Constraint: Shifts must expand in a continous window
+    # Constraint 3: Shifts must expand in a continous window
     # in other words, do not allow smaller shifts
     _constraint_shifts_contiguous(
         model,
@@ -574,7 +592,7 @@ def compute_schedule(payload: dict):
         all_duration,
     )
 
-    # # Constraint 6: Max amount of shifts that can start/end at the same time
+    # # Constraint 5: Max amount of shifts that can start/end at the same time
     # Populate auxiliary variables
     _constraint_shift_start_and_shift_end(
         model,
@@ -604,20 +622,18 @@ def compute_schedule(payload: dict):
         max_ends_per_slot,
     )
 
-    # Constraint 7: DO not end during rush hours
+    # Constraint 6: DO not end during rush hours
     _constraint_rush_hours(
         model, shifts_end, rush_hour, all_drivers, all_days, all_hours, all_minutes
     )
 
-    # Input: demand
-    demand = {
-        (day, hour, minute): 1 if hour < 12 else 0
-        for day in all_days
-        for hour in all_hours
-        for minute in all_minutes
-    }
-
-    print("\t Time:", round(time.time() - t0, 2), "seconds")
+    print(
+        "\t Time:",
+        round(time.time() - t0, 2),
+        "seconds",
+        round((time.time() - t0) / 60, 2),
+        "minutes",
+    )
     print("Defining objective function")
     t0 = time.time()
 
@@ -658,17 +674,32 @@ def compute_schedule(payload: dict):
         )
     )
 
-    print("\t Time:", round(time.time() - t0, 2), "seconds")
+    print(
+        "\t Time:",
+        round(time.time() - t0, 2),
+        "seconds",
+        round((time.time() - t0) / 60, 2),
+        "minutes",
+    )
     print("Solving problem")
     t0 = time.time()
 
     solver = cp_model.CpSolver()
     status = solver.Solve(model)
 
-    print("\t Time:", round(time.time() - t0, 2), "seconds")
+    print(
+        "\t Time:",
+        round(time.time() - t0, 2),
+        "seconds",
+        round((time.time() - t0) / 60, 2),
+        "minutes",
+    )
 
     if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
         print(f"Maximum of objective function: {solver.ObjectiveValue()}\n")
+        print(
+            "Type of solution:", "Optimal" if status == cp_model.OPTIMAL else "Feasible"
+        )
         for day in all_days:
             for s_hour in all_hours:
                 for s_minute in all_minutes:
