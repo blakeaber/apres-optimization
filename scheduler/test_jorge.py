@@ -28,6 +28,23 @@ def _negated_bounded_span(shifts, start, length):
     return sequence
 
 
+def _get_drivers_in_time(shifts_state, day, hour, minute, all_drivers, all_duration):
+    """Return the number of drivers for a given timestamp"""
+    return sum(
+        shifts_state[
+            (
+                day,
+                hour,
+                minute,
+                driver,
+                duration,
+            )
+        ]
+        for driver in all_drivers
+        for duration in all_duration
+    )
+
+
 def _constraint_one_shift_per_day(
     model,
     shifts_state,
@@ -369,6 +386,27 @@ def _constraint_rush_hours(
                     ).OnlyEnforceIf(rush_hour[(hour, minute)])
 
 
+def _constraint_minimum_shifts_per_hour(
+    model,
+    shifts_state,
+    minimum_shifts,
+    all_days,
+    all_hours,
+    all_drivers,
+    all_minutes,
+    all_duration,
+):
+    for day in all_days:
+        for hour in all_hours:
+            drivers = sum(
+                _get_drivers_in_time(
+                    shifts_state, day, hour, minute, all_drivers, all_duration
+                )
+                for minute in all_minutes
+            )
+            model.Add(minimum_shifts[(day, hour)] <= drivers)
+
+
 """
 Constraints:
 - [x] Shift duration
@@ -376,9 +414,9 @@ Constraints:
 - [x] A driver can only be assigned to one shift per day
 - [x] The sum of assigned time must be at least of the shift duration
 - [x] The assigned shift slots must be consecutive
-- [] Minimum shifts per hour
+- [x] Minimum shifts per hour
 - [x] Max amount of shifts that can start/end per minute slot
-- [] Don't end during rush hours
+- [x] Don't end during rush hours
 - [] Assume callouts
 """
 
@@ -411,6 +449,12 @@ def compute_schedule(payload: dict):
     for hour in all_hours:
         for minute in all_minutes:
             rush_hour_input[(hour, minute)] = 1 if hour in {6, 7, 8, 9, 11} else 0
+
+    # Market minimum shifts
+    minimum_shifts = {}
+    for day in all_days:
+        for hour in all_hours:
+            minimum_shifts[(day, hour)] = 1 if hour in {15} else 0
 
     model = cp_model.CpModel()
 
@@ -518,6 +562,18 @@ def compute_schedule(payload: dict):
         minutes_interval,
     )
 
+    # Constraint 4: Minimum shifts per hour
+    _constraint_minimum_shifts_per_hour(
+        model,
+        shifts_state,
+        minimum_shifts,
+        all_days,
+        all_hours,
+        all_drivers,
+        all_minutes,
+        all_duration,
+    )
+
     # # Constraint 6: Max amount of shifts that can start/end at the same time
     # Populate auxiliary variables
     _constraint_shift_start_and_shift_end(
@@ -561,22 +617,6 @@ def compute_schedule(payload: dict):
         for minute in all_minutes
     }
 
-    def _get_drivers_in_time(day, hour, minute):
-        """Return the number of drivers for a given timestamp"""
-        return sum(
-            shifts_state[
-                (
-                    day,
-                    hour,
-                    minute,
-                    driver,
-                    duration,
-                )
-            ]
-            for driver in all_drivers
-            for duration in all_duration
-        )
-
     print("\t Time:", round(time.time() - t0, 2), "seconds")
     print("Defining objective function")
     t0 = time.time()
@@ -598,7 +638,9 @@ def compute_schedule(payload: dict):
                     completion_rate[(day, hour, minute)],
                     [
                         demand[(day, hour, minute)],
-                        _get_drivers_in_time(day, hour, minute),
+                        _get_drivers_in_time(
+                            shifts_state, day, hour, minute, all_drivers, all_duration
+                        ),
                     ],
                 )
 
@@ -606,7 +648,10 @@ def compute_schedule(payload: dict):
     model.Maximize(
         sum(
             completion_rate[(day, hour, minute)] * revenue_passenger
-            - _get_drivers_in_time(day, hour, minute) * cost_driver_per_minute
+            - _get_drivers_in_time(
+                shifts_state, day, hour, minute, all_drivers, all_duration
+            )
+            * cost_driver_per_minute
             for day in all_days
             for hour in all_hours
             for minute in all_minutes
