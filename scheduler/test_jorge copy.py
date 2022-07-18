@@ -2,38 +2,6 @@ import time
 from ortools.sat.python import cp_model
 
 
-class SolutionCollector(cp_model.CpSolverSolutionCallback):
-    # Class to print all solutions found
-    def __init__(self, variables):
-        cp_model.CpSolverSolutionCallback.__init__(self)
-        self.__variables = variables
-        self.__solution_count = 0
-        self.__start_time = time.time()
-        self._best_solution = 0
-
-    def on_solution_callback(self):
-        self.__solution_count += 1
-
-        if self.ObjectiveValue() > self._best_solution:
-            print(
-                "Solution found:",
-                self.__solution_count,
-                "-",
-                self.ObjectiveValue(),
-                "-",
-                round(time.time() - self.__start_time, 2),
-            )
-            arr = []
-            for k, v in self.__variables[0].items():
-                if self.Value(v) == 1:
-                    arr.append([k[0], k[1], k[2], k[3], k[4]])
-            df = pd.DataFrame(
-                arr, columns=["day", "hour", "minute", "driver", "duration"]
-            )
-            df.to_csv("best_solution.csv", index=False)
-        print()
-
-
 def _negated_bounded_span(shifts, start, length):
     """From: https://github.com/google/or-tools/blob/master/examples/python/shift_scheduling_sat.py#L29
     Filters an isolated sub-sequence of variables assigned to True.
@@ -62,20 +30,18 @@ def _negated_bounded_span(shifts, start, length):
 
 def _get_drivers_in_time(shifts_state, day, hour, minute, all_drivers, all_duration):
     """Return the number of drivers for a given timestamp"""
-    return cp_model.LinearExpr.Sum(
-        [
-            shifts_state[
-                (
-                    day,
-                    hour,
-                    minute,
-                    driver,
-                    duration,
-                )
-            ]
-            for driver in all_drivers
-            for duration in all_duration
+    return sum(
+        shifts_state[
+            (
+                day,
+                hour,
+                minute,
+                driver,
+                duration,
+            )
         ]
+        for driver in all_drivers
+        for duration in all_duration
     )
 
 
@@ -453,7 +419,7 @@ def _constraint_minimum_shifts_per_hour(
                 drivers = _get_drivers_in_time(
                     shifts_state, day, hour, minute, all_drivers, all_duration
                 )
-                model.Add(drivers >= minimum_shifts[(day, hour, minute)])
+                model.Add(minimum_shifts[(day, hour, minute)] <= drivers)
 
 
 """
@@ -576,6 +542,9 @@ def compute_schedule(payload: dict):
         all_drivers,
         all_duration,
     )
+
+    # DEBUG - Force driver to have shifht 300
+    model.Add(shifts_state[(0, 4, 0, 0, 300)] == 1)
 
     # Constraint 2: The sum of assigned minutes should be at least as the shift duration or 0
     _constraint_shift_minimum_duration(
@@ -711,10 +680,7 @@ def compute_schedule(payload: dict):
     t0 = time.time()
 
     solver = cp_model.CpSolver()
-    solver.parameters.enumerate_all_solutions = True
-    status = solver.Solve(
-        model, SolutionCollector([shifts_state, shifts_start, shifts_start])
-    )
+    status = solver.Solve(model)
 
     print(
         "\t Time:",
@@ -843,17 +809,16 @@ if __name__ == "__main__":
 
     minimum_shifts = pd.read_csv("dallas_minimum_shifts.csv")
     minimum_shifts = {
-        (c["day"], c["hour"], c["minute"]): 0  # int(c["min_shifts"])
+        (c["day"], c["hour"], c["minute"]): c["min_shifts"]
         for _, c in minimum_shifts.iterrows()
     }
     rush_hours = pd.read_csv("dallas_rush_hours.csv")
     rush_hours = {
-        (c["hour"], c["minute"]): int(c["rush_hour"]) for _, c in rush_hours.iterrows()
+        (c["hour"], c["minute"]): c["rush_hour"] for _, c in rush_hours.iterrows()
     }
     demand = pd.read_csv("dallas_forecast_v3_clip.csv")
     demand = {
-        (c["day"], c["hour"], c["minute"]): int(round(c["demand"]))
-        for _, c in demand.iterrows()
+        (c["day"], c["hour"], c["minute"]): c["demand"] for _, c in demand.iterrows()
     }
 
     inputs = {
@@ -861,7 +826,7 @@ if __name__ == "__main__":
         "num_hours": 24,
         "num_minutes": 60,
         "minutes_interval": 15,
-        "num_drivers": 77,
+        "num_drivers": 2,
         "min_duration": 4 * 60,
         "max_duration": 10 * 60,
         "duration_step": 15,

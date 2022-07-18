@@ -4,6 +4,7 @@
 from dash import Dash, html, dcc
 
 import front.forecast_view as fv
+import front.scheduler_view as sv
 
 app = Dash(__name__)
 
@@ -34,6 +35,7 @@ app.layout = html.Div(
                     ),
                     dcc.Tab(
                         label="Scheduling",
+                        children=sv.layout,
                         className="custom-tab",
                         selected_className="custom-tab--selected",
                         style=tab_style,
