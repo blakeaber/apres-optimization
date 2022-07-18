@@ -458,7 +458,7 @@ def _constraint_minimum_shifts_per_hour(
                 drivers = _get_drivers_in_time(
                     shifts_state, day, hour, minute, all_drivers, all_duration
                 )
-                model.Add(minimum_shifts[(day, hour, minute)] <= drivers)
+                model.Add(drivers >= minimum_shifts[(day, hour, minute)])
 
 
 """
@@ -848,7 +848,7 @@ if __name__ == "__main__":
 
     minimum_shifts = pd.read_csv("dallas_minimum_shifts.csv")
     minimum_shifts = {
-        (c["day"], c["hour"], c["minute"]): 0  # int(c["min_shifts"])
+        (c["day"], c["hour"], c["minute"]): int(c["min_shifts"])
         for _, c in minimum_shifts.iterrows()
     }
     rush_hours = pd.read_csv("dallas_rush_hours.csv")
@@ -866,7 +866,7 @@ if __name__ == "__main__":
         "num_hours": 24,
         "num_minutes": 60,
         "minutes_interval": 15,
-        "num_drivers": 1,
+        "num_drivers": 10,
         "min_duration": 4 * 60,
         "max_duration": 10 * 60,
         "duration_step": 15,
