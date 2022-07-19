@@ -55,7 +55,11 @@ class DebugDataProvider(DataProvider):
 
     def get_scheduler_best_solution(self):
         # TODO For testing we are retuning the demand used as input
-        df = pd.read_csv("best_solution.csv")
+        df = (
+            pd.read_csv("best_solution.csv")
+            .sort_values(["day", "hour", "day"])
+            .reset_index(drop=True)
+        )
         df["time"] = (
             df["day"].astype(str)
             + "-"
@@ -63,8 +67,13 @@ class DebugDataProvider(DataProvider):
             + "-"
             + df["minute"].astype(str)
         )
-        df = df.groupby("time").size().reset_index()
-        df.columns = ["time", "drivers"]
+
+        starts = df.groupby("driver").first().groupby("time").size()
+        ends = df.groupby("driver").last().groupby("time").size()
+        df = df.groupby("time").size()
+        df = pd.concat([df, starts, ends], axis=1).fillna(0)
+        df.columns = ["drivers", "starts", "ends"]
+        df = df.astype(int).reset_index()
 
         demand = pd.read_csv("dallas_forecast_v3_clip.csv")
         demand["time"] = (

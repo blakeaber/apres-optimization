@@ -13,7 +13,19 @@ data_provider = DebugDataProvider()
 )
 def get_market_date_range(market):
     drivers = data_provider.get_scheduler_best_solution()
-    return px.line(drivers, x="time", y=["drivers", "demand"])
+    fig = px.line(
+        drivers,
+        x="time",
+        y=["drivers", "demand"],
+        title=f"Best solution with {drivers['starts'].sum()} drivers",
+    )
+    fig.add_bar(
+        x=drivers["time"], y=drivers["starts"], name="starts", marker={"color": "green"}
+    )
+    fig.add_bar(
+        x=drivers["time"], y=drivers["ends"], name="ends", marker={"color": "red"}
+    )
+    return fig
 
 
 data_provider.get_scheduler_best_solution()
