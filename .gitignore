@@ -5,3 +5,4 @@ __pycache__/
 plato.egg-info/
 .DS_Store
 .venv
+*.csv
