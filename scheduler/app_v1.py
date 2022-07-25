@@ -844,7 +844,8 @@ if __name__ == "__main__":
 
     minimum_shifts = pd.read_csv("dallas_minimum_shifts.csv")
     minimum_shifts = {
-        (c["day"], c["hour"], c["minute"]): 0 for _, c in minimum_shifts.iterrows()
+        (c["day"], c["hour"], c["minute"]): int(c["min_shifts"])
+        for _, c in minimum_shifts.iterrows()
     }
     rush_hours = pd.read_csv("dallas_rush_hours.csv")
     rush_hours = {
@@ -861,7 +862,7 @@ if __name__ == "__main__":
         "num_hours": 24,
         "num_minutes": 60,
         "minutes_interval": 15,
-        "num_vehicles": 2,
+        "num_vehicles": 77,
         "min_duration": 4 * 60,
         "max_duration": 10 * 60,
         "duration_step": 15,
