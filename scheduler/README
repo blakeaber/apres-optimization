@@ -1,0 +1,12 @@
+## Versions
+### V1
+Initial version which outputs a daily schedule (i.e. it doesn't support shifts after midnight).
+The implemented constraints are:
+- Shift duration
+- Number of drivers (same as number of vehicles?)
+- A driver can only be assigned to one shift per day
+- The sum of assigned time must be at least of the shift duration
+- The assigned shift slots must be consecutive
+- Minimum shifts per hour
+- Max amount of shifts that can start/end per minute slot
+- Don't end during rush hours
