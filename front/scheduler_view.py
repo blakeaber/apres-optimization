@@ -12,18 +12,21 @@ data_provider = DebugDataProvider()
     Input(component_id="refresh-button", component_property="n_clicks"),
 )
 def get_market_date_range(market):
-    drivers = data_provider.get_scheduler_best_solution()
+    vehicles = data_provider.get_scheduler_best_solution()
     fig = px.line(
-        drivers,
+        vehicles,
         x="time",
-        y=["drivers", "demand"],
-        title=f"Best solution with {drivers['starts'].sum()} drivers",
+        y=["vehicles", "demand"],
+        title=f"Best solution with {vehicles['starts'].sum()} vehicles",
     )
     fig.add_bar(
-        x=drivers["time"], y=drivers["starts"], name="starts", marker={"color": "green"}
+        x=vehicles["time"],
+        y=vehicles["starts"],
+        name="starts",
+        marker={"color": "green"},
     )
     fig.add_bar(
-        x=drivers["time"], y=drivers["ends"], name="ends", marker={"color": "red"}
+        x=vehicles["time"], y=vehicles["ends"], name="ends", marker={"color": "red"}
     )
     return fig
 

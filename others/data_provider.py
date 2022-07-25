@@ -68,11 +68,11 @@ class DebugDataProvider(DataProvider):
             + df["minute"].astype(str)
         )
 
-        starts = df.groupby("driver").first().groupby("time").size()
-        ends = df.groupby("driver").last().groupby("time").size()
+        starts = df.groupby("vehicle").first().groupby("time").size()
+        ends = df.groupby("vehicle").last().groupby("time").size()
         df = df.groupby("time").size()
         df = pd.concat([df, starts, ends], axis=1).fillna(0)
-        df.columns = ["drivers", "starts", "ends"]
+        df.columns = ["vehicles", "starts", "ends"]
         df = df.astype(int).reset_index()
 
         demand = pd.read_csv("dallas_forecast_v3_clip.csv")
