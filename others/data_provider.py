@@ -22,7 +22,7 @@ class DataProvider(ABC):
 class DebugDataProvider(DataProvider):
     """Data Provider for debug purposes"""
 
-    PATH = "/Users/jorge/Documents/alto"
+    PATH = "/Users/blake/work/apres/alto_app"
 
     def get_market_list(self) -> list:
         return sorted(["dallas", "houston", "LA", "miami", "SV", "washington"])
