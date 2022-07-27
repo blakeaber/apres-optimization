@@ -27,11 +27,11 @@ app.layout = html.Div(
                         [
                             dbc.Tab(label="Import Data", tab_id="tab-1"),
                             dbc.Tab(label="Set Model Parameters", tab_id="tab-2"),
-                            dbc.Tab(label="Review", tab_id="tab-3"),
+                            # dbc.Tab(label="Review", tab_id="tab-3"),
                             dbc.Tab(label="Optimize", tab_id="tab-4"),
                         ],
                         id="card-tabs",
-                        active_tab="tab-1",
+                        # active_tab="tab-1",
                     )
                 ),
                 dbc.CardBody(html.P(id="card-content", className="card-text")),

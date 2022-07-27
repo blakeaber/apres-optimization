@@ -1,8 +1,97 @@
 
-from subprocess import call
+import os
+import subprocess
+import pandas as pd
+import dash
 from dash import Dash, html, dcc, Output, callback, Input
 import dash_bootstrap_components as dbc
 import plotly.express as px
 
 
 layout = dbc.Card()
+
+
+layout = html.Div([
+    html.Div([            
+    dbc.Button('Start', id='start-button'),
+    html.Div(id='output-container-button'),
+    dcc.Graph(id="scheduler-chart"),
+    dcc.Interval(
+        id='interval-component',
+        interval=3*1000, # in milliseconds
+        n_intervals=0
+    )
+    ])
+])                      
+                
+@callback(
+    Output('output-container-button', 'children'),
+    Input('start-button', 'n_clicks')
+)
+def run_script_onClick(n_clicks):
+    if not n_clicks:
+        return dash.no_update
+
+    _ = subprocess.Popen('python app_v1_6.py', shell=True, cwd='./scheduler')  
+    return dbc.Alert("We're off and running! Will report back in a bit...", color="success")
+
+
+@callback(Output('scheduler-chart', 'figure'),
+            Input('interval-component', 'n_intervals'))
+def get_scheduler_best_solution(n):
+    
+    all_solutions = [i[:-4].split('best_solution_') for i in os.listdir("./scheduler/solutions")]
+    best_solution = int(all_solutions[-1][1])
+    best_solution
+
+    df = (
+        pd.read_csv(f"./scheduler/solutions/best_solution_{best_solution}.csv")
+        .sort_values(["day", "hour", "day"])
+        .reset_index(drop=True)
+    )
+    df["time"] = (
+        df["day"].astype(str)
+        + "-"
+        + df["hour"].astype(str)
+        + "-"
+        + df["minute"].astype(str)
+    )
+
+    starts = df.groupby("vehicle").first().groupby("time").size()
+    ends = df.groupby("vehicle").last().groupby("time").size()
+    df = df.groupby("time").size()
+    df = pd.concat([df, starts, ends], axis=1).fillna(0)
+    df.columns = ["vehicles", "starts", "ends"]
+    df = df.astype(int).reset_index()
+
+    demand = pd.read_csv(f"./scheduler/user_input/constraint_demand.csv")
+    demand["time"] = (
+        demand["day"].astype(str)
+        + "-"
+        + demand["hour"].astype(str)
+        + "-"
+        + demand["minute"].astype(str)
+    )
+
+    df = (
+        df.merge(demand, on="time")
+        .sort_values(["day", "hour", "day"])
+        .reset_index(drop=True)
+    )
+
+    fig = px.line(
+        df,
+        x="time",
+        y=["vehicles", "demand"],
+        title=f"Best solution ({best_solution}) with {df['starts'].sum()} vehicles",
+    )
+    fig.add_bar(
+        x=df["time"],
+        y=df["starts"],
+        name="starts",
+        marker={"color": "green"},
+    )
+    fig.add_bar(
+        x=df["time"], y=df["ends"], name="ends", marker={"color": "red"}
+    )
+    return fig
