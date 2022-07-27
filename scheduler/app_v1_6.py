@@ -328,7 +328,19 @@ if __name__ == "__main__":
     with open('./user_input/parameters.json', 'r') as f:
         input_parameters = json.load(f)
 
+    # Fixed parameters (based on daily optimization)
+    input_parameters["num_days"] = 1
+    input_parameters["num_hours"] = 24
+    input_parameters["num_minutes"] = 60
+    input_parameters["minutes_interval"] = 15
+    input_parameters["duration_step"] = 15
+
+    # Convert duration variables from hours to minutes
+    input_parameters['min_duration'] *= 60
+    input_parameters['max_duration'] *= 60
+
     # Read input files from folder
+    # TODO: refactor and put into DataProvider object
     demand_input = pd.read_csv("./user_input/constraint_demand.csv")
     rush_hours_input = pd.read_csv("./user_input/constraint_rush_hours.csv")
     minimum_shifts_input = pd.read_csv("./user_input/constraint_min_shifts.csv")

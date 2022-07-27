@@ -1,51 +1,60 @@
 # Run this app with `python app.py` and
 # visit http://127.0.0.1:8050/ in your web browser.
 
-from dash import Dash, html, dcc
+import dash
+from dash import html, callback, Input, Output
+import dash_bootstrap_components as dbc
 
-# import front.forecast_view as fv
-import front.scheduler_view as sv
+from front import import_view, parameters_view, review_view, optimize_view
 
-app = Dash(__name__)
 
-# Tab CSS styling is bugged
-tab_style = {
-    "color": "white",
-    "background-color": "#916a56",
-    "align-items": "center",
-    "justify-content": "center",
-}
+# APPLICATION SETUP
+# ------------------------------------
+app = dash.Dash(external_stylesheets=[dbc.themes.BOOTSTRAP], suppress_callback_exceptions=True)
 
-tab_selected_style = {
-    "color": "#312b2b",
-    "border-top": "3px solid #916a56",
-}
-
+# LAYOUT
 app.layout = html.Div(
     children=[
-        html.H1(children="Alto App", className="app-title"),
-        html.Div(
-            children=dcc.Tabs(
-                [
-                    # dcc.Tab(
-                    #     label="Forecast",
-                    #     children=fv.layout,
-                    #     style=tab_style,
-                    #     selected_style=tab_selected_style,
-                    # ),
-                    dcc.Tab(
-                        label="Scheduling",
-                        children=sv.layout,
-                        className="custom-tab",
-                        selected_className="custom-tab--selected",
-                        style=tab_style,
-                        selected_style=tab_selected_style,
-                    ),
-                ]
-            ),
+        dbc.NavbarSimple(
+            brand="Alto: Schedule Optimization",
+            color="primary",
+            dark=True,
         ),
+        dbc.Card(
+            [
+                dbc.CardHeader(
+                    dbc.Tabs(
+                        [
+                            dbc.Tab(label="Import Data", tab_id="tab-1"),
+                            dbc.Tab(label="Set Model Parameters", tab_id="tab-2"),
+                            dbc.Tab(label="Review", tab_id="tab-3"),
+                            dbc.Tab(label="Optimize", tab_id="tab-4"),
+                        ],
+                        id="card-tabs",
+                        active_tab="tab-1",
+                    )
+                ),
+                dbc.CardBody(html.P(id="card-content", className="card-text")),
+            ]
+        )
     ],
 )
+
+@callback(
+    Output("card-content", "children"), [Input("card-tabs", "active_tab")]
+)
+def tab_content(active_tab):
+    if active_tab == 'tab-1':
+        return import_view.layout
+    elif active_tab == 'tab-2':
+        return parameters_view.layout
+    elif active_tab == 'tab-3':
+        return review_view.layout
+    elif active_tab == 'tab-4':
+        return optimize_view.layout
+    else:
+        return review_view.layout
+
 
 if __name__ == "__main__":
     app.run_server(debug=True)
