@@ -1,4 +1,4 @@
-day,hour,minute,driver,duration
+day,hour,minute,vehicle,duration
 0,0,0,29,315
 0,0,0,36,360
 0,0,0,66,300
