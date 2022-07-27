@@ -22,7 +22,7 @@ class DataProvider(ABC):
 class DebugDataProvider(DataProvider):
     """Data Provider for debug purposes"""
 
-    PATH = "/Users/jorge/Documents/alto"
+    PATH = "/Users/blake/Desktop/work/apres/alto_app"
 
     def get_market_list(self) -> list:
         return sorted(["dallas", "houston", "LA", "miami", "SV", "washington"])
@@ -56,7 +56,7 @@ class DebugDataProvider(DataProvider):
     def get_scheduler_best_solution(self):
         # TODO For testing we are retuning the demand used as input
         df = (
-            pd.read_csv("best_solution.csv")
+            pd.read_csv(f"{self.PATH}/scheduler/user_output/best_solution.csv")
             .sort_values(["day", "hour", "day"])
             .reset_index(drop=True)
         )
@@ -75,7 +75,7 @@ class DebugDataProvider(DataProvider):
         df.columns = ["vehicles", "starts", "ends"]
         df = df.astype(int).reset_index()
 
-        demand = pd.read_csv("dallas_forecast_v3_clip.csv")
+        demand = pd.read_csv(f"{self.PATH}/scheduler/user_input/constraint_demand.csv")
         demand["time"] = (
             demand["day"].astype(str)
             + "-"

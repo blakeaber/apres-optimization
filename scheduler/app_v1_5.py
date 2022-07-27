@@ -887,21 +887,21 @@ def test():
 if __name__ == "__main__":
     import pandas as pd
 
-    minimum_shifts = pd.read_csv("dallas_minimum_shifts.csv")
+    minimum_shifts = pd.read_csv("../dallas_minimum_shifts.csv")
     minimum_shifts = {
         (c["day"], c["hour"], c["minute"]): int(c["min_shifts"])
         for _, c in minimum_shifts.iterrows()
     }
-    rush_hours = pd.read_csv("dallas_rush_hours.csv")
+    rush_hours = pd.read_csv("../dallas_rush_hours.csv")
     rush_hours = {
         (c["hour"], c["minute"]): int(c["rush_hour"]) for _, c in rush_hours.iterrows()
     }
-    demand = pd.read_csv("dallas_forecast_v3_clip.csv")
+    demand = pd.read_csv("../dallas_forecast_v3_clip.csv")
     demand = {
         (c["day"], c["hour"], c["minute"]): int(round(c["demand"]))
         for _, c in demand.iterrows()
     }
-    market_hours = pd.read_csv("dallas_market_hours.csv")
+    market_hours = pd.read_csv("../dallas_market_hours.csv")
     market_hours = {
         (c["day"], c["hour"], c["minute"]): int(round(c["open"]))
         for _, c in market_hours.iterrows()
