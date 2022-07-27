@@ -12,9 +12,12 @@ Constraints:
 """
 
 import time
+import json
+import pandas as pd
 from ortools.sat.python import cp_model
-from scheduler import utils
-from scheduler.constraints import (
+
+import utils
+from constraints import (
     one_shift_per_day,
     shift_min_duration,
     shifts_contiguous,
@@ -24,7 +27,7 @@ from scheduler.constraints import (
     rush_hours,
     market_hours
 )
-from scheduler.auxiliary import (
+from auxiliary import (
     define_shift_state, 
     define_assigned_shifts, 
     define_shifts_start,
@@ -50,6 +53,11 @@ def compute_schedule(payload: dict):
     max_starts_per_slot = payload["max_starts_per_slot"]
     max_ends_per_slot = payload["max_ends_per_slot"]
 
+    # Constraint Flags
+    enable_min_shift_constraint = payload["enable_min_shift_constraint"]
+    enable_rush_hour_constraint = payload["enable_rush_hour_constraint"]
+    enable_market_hour_constraint = payload["enable_market_hour_constraint"]
+
     # The states is [day, start_hour, start_minute, end_hour, end_minute, vehicle_id, shift_hours]
     # Ranges (for the for-loops)
     all_days = range(num_days)
@@ -70,7 +78,7 @@ def compute_schedule(payload: dict):
     # Market open/close hours (1/0)
     market_hours_input = payload["market_hours"]
 
-    print("Defining Variables")
+    print("-- Defining Variables-- ")
     t0 = time.time()
 
     # Define Auxiliary Variables
@@ -94,7 +102,8 @@ def compute_schedule(payload: dict):
     )
 
     print(f'Time: {round(time.time() - t0, 2)} Seconds, {round((time.time() - t0) / 60, 2)} Minutes')
-    print("Defining Constraints")
+    print(f'At: {utils.get_current_time()}')
+    print("-- Defining Constraints --")
     t0 = time.time()
 
     # Constraint 1: A vehicle can only be assigned to a shift per day
@@ -137,16 +146,17 @@ def compute_schedule(payload: dict):
     )
 
     # Constraint 4: Minimum shifts per hour
-    min_shifts_per_hour(
-        model,
-        shifts_state,
-        minimum_shifts_input,
-        all_days,
-        all_hours,
-        all_vehicles,
-        all_minutes,
-        all_duration,
-    )
+    if enable_min_shift_constraint:
+        min_shifts_per_hour(
+            model,
+            shifts_state,
+            minimum_shifts_input,
+            all_days,
+            all_hours,
+            all_vehicles,
+            all_minutes,
+            all_duration,
+        )
 
     # # Constraint 5: Max amount of shifts that can start/end at the same time
     # Populate auxiliary variables
@@ -179,25 +189,28 @@ def compute_schedule(payload: dict):
     )
 
     # Constraint 6: DO not end during rush hours
-    rush_hours(
-        model, shifts_end, rush_hour, all_vehicles, all_days, all_hours, all_minutes
-    )
+    if enable_rush_hour_constraint:
+        rush_hours(
+            model, shifts_end, rush_hour, all_vehicles, all_days, all_hours, all_minutes
+        )
 
     # Constraint 7: No shifts during market closed hours
     # There are different ways to do this, i.e. `OnlyEnforceIf`, but I think this is the easiest and simplest one
-    market_hours(
-        model,
-        shifts_state,
-        market_hours_input,
-        all_days,
-        all_hours,
-        all_vehicles,
-        all_minutes,
-        all_duration,
-    )
+    if enable_market_hour_constraint:
+        market_hours(
+            model,
+            shifts_state,
+            market_hours_input,
+            all_days,
+            all_hours,
+            all_vehicles,
+            all_minutes,
+            all_duration,
+        )
 
     print(f'Time: {round(time.time() - t0, 2)} Seconds, {round((time.time() - t0) / 60, 2)} Minutes')
-    print("Setting Up Optimization Problem...")
+    print(f'At: {utils.get_current_time()}')
+    print("-- Setting Up Optimization Problem --")
     t0 = time.time()
 
     # Maximize the revenue (completion_rate*revenue - occupancy*cost = completion_rate * revenue_per_passenger - activer_vehicle * cost_per_vehicle)
@@ -205,7 +218,7 @@ def compute_schedule(payload: dict):
         cp_model.LinearExpr.Sum(
             [
                 completion_rate[(day, hour, minute)] * revenue_passenger
-                - utils._get_vehicles_in_time(
+                - utils.get_vehicles_in_time(
                     shifts_state, day, hour, minute, all_vehicles, all_duration
                 )
                 * cost_vehicle_per_minute
@@ -217,176 +230,132 @@ def compute_schedule(payload: dict):
     )
 
     print(f'Time: {round(time.time() - t0, 2)} Seconds, {round((time.time() - t0) / 60, 2)} Minutes')
-    print("Solving Optimization Problem...")
+    print(f'At: {utils.get_current_time()}')
+    print("-- Solving Optimization Problem --")
     t0 = time.time()
 
     solver = cp_model.CpSolver()
-    solver.parameters.enumerate_all_solutions = True
+    solver.parameters.num_search_workers = 7  # this enables multi-core processing of the search space
+    solver.parameters.enumerate_all_solutions = False  # cannot enumerate all solutions when solving in parallel
+
     status = solver.Solve(
-        model, utils.SolutionCollector([shifts_state, shifts_start, shifts_start])
+        model, 
+        utils.SolutionCollector(
+            variables=[shifts_state, shifts_start, shifts_start], 
+            columns=["day", "hour", "minute", "vehicle", "duration"]
+        )
     )
 
-    print(
-        "\t Time:",
-        round(time.time() - t0, 2),
-        "seconds",
-        round((time.time() - t0) / 60, 2),
-        "minutes",
-    )
+    print(f'Time: {round(time.time() - t0, 2)} Seconds, {round((time.time() - t0) / 60, 2)} Minutes')
+    print(f'At: {utils.get_current_time()}')
+    print("-- Printing Solutions --")
 
     if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
         print(f"Maximum of objective function: {solver.ObjectiveValue()}\n")
-        print(
-            "Type of solution:", "Optimal" if status == cp_model.OPTIMAL else "Feasible"
-        )
-        for day in all_days:
-            for s_hour in all_hours:
-                for s_minute in all_minutes:
-                    for vehicle in all_vehicles:
-                        for duration in all_duration:
-                            if (
-                                solver.Value(
-                                    shifts_state[
-                                        (
-                                            day,
-                                            s_hour,
-                                            s_minute,
-                                            vehicle,
-                                            duration,
-                                        )
-                                    ]
-                                )
-                                == 1
-                            ):
-                                print(
-                                    "day",
-                                    day,
-                                    "sHour",
-                                    s_hour,
-                                    "sMinute",
-                                    s_minute,
-                                    "vehicle",
-                                    vehicle,
-                                    "Duration",
-                                    duration,
-                                    "SHIFT_START",
-                                    solver.Value(
-                                        shifts_start[
-                                            (
-                                                vehicle,
-                                                day,
-                                                s_hour,
-                                                s_minute,
-                                            )
-                                        ]
-                                    ),
-                                    "REAL",
-                                    solver.Value(
-                                        shifts_state[
-                                            (
-                                                day,
-                                                s_hour,
-                                                s_minute,
-                                                vehicle,
-                                                duration,
-                                            )
-                                        ]
-                                    ),
-                                    "SHIFT_END",
-                                    solver.Value(
-                                        shifts_end[
-                                            (
-                                                vehicle,
-                                                day,
-                                                s_hour,
-                                                s_minute,
-                                            )
-                                        ]
-                                    ),
-                                )
+        # print("Type of solution:", "Optimal" if status == cp_model.OPTIMAL else "Feasible")
+        # for day in all_days:
+        #     for s_hour in all_hours:
+        #         for s_minute in all_minutes:
+        #             for vehicle in all_vehicles:
+        #                 for duration in all_duration:
+        #                     if (
+        #                         solver.Value(
+        #                             shifts_state[
+        #                                 (
+        #                                     day,
+        #                                     s_hour,
+        #                                     s_minute,
+        #                                     vehicle,
+        #                                     duration,
+        #                                 )
+        #                             ]
+        #                         )
+        #                         == 1
+        #                     ):
+        #                         print(
+        #                             "day",
+        #                             day,
+        #                             "sHour",
+        #                             s_hour,
+        #                             "sMinute",
+        #                             s_minute,
+        #                             "vehicle",
+        #                             vehicle,
+        #                             "Duration",
+        #                             duration,
+        #                             "SHIFT_START",
+        #                             solver.Value(
+        #                                 shifts_start[
+        #                                     (
+        #                                         vehicle,
+        #                                         day,
+        #                                         s_hour,
+        #                                         s_minute,
+        #                                     )
+        #                                 ]
+        #                             ),
+        #                             "REAL",
+        #                             solver.Value(
+        #                                 shifts_state[
+        #                                     (
+        #                                         day,
+        #                                         s_hour,
+        #                                         s_minute,
+        #                                         vehicle,
+        #                                         duration,
+        #                                     )
+        #                                 ]
+        #                             ),
+        #                             "SHIFT_END",
+        #                             solver.Value(
+        #                                 shifts_end[
+        #                                     (
+        #                                         vehicle,
+        #                                         day,
+        #                                         s_hour,
+        #                                         s_minute,
+        #                                     )
+        #                                 ]
+        #                             ),
+        #                         )
     else:
         print("No solution found.")
 
 
-def test():
-    model = cp_model.CpModel()
-    solver = cp_model.CpSolver()
-    status = solver.Solve(model)
-
-    a = model.NewBoolVar("a")
-    b = model.NewBoolVar("b")
-    # c = model.NewBoolVar("c")
-
-    # 1 pair - 2 var
-    for i in range(1):
-        model.AddBoolOr(utils._negated_bounded_span([a, b], i, 2))
-    # model.AddBoolOr([a, b])
-    # model.AddBoolOr([a.Not(), b.Not()])
-
-    # 2 pair - 2 var
-    # model.AddBoolOr([a, b.Not()])
-    # model.AddBoolOr([a, b])
-    # model.AddBoolOr([a.Not(), b])
-
-    # 1 pair - 3 var
-    # model.AddBoolOr([a, b, c])
-    # model.AddBoolOr([a.Not(), b.Not(), c.Not()])
-
-    class SolutionCollector(cp_model.CpSolverSolutionCallback):
-        def __init__(self, variables):
-            cp_model.CpSolverSolutionCallback.__init__(self)
-            self.__variables = variables
-            self.solution_list = []
-
-        def on_solution_callback(self):
-            self.solution_list.append([self.Value(v) for v in self.__variables])
-
-    solution_collector = SolutionCollector([a, b])
-    solver.SearchForAllSolutions(model, solution_collector)
-
-    print(*solution_collector.solution_list, sep="\n")
-    print(len(solution_collector.solution_list))
-
-
 if __name__ == "__main__":
-    import pandas as pd
 
-    minimum_shifts = pd.read_csv("dallas_minimum_shifts.csv")
-    minimum_shifts = {
+    # Read app settings from file (must be "latest" settings via callback)
+    with open('./user_input/parameters.json', 'r') as f:
+        input_parameters = json.load(f)
+
+    # Read input files from folder
+    demand_input = pd.read_csv("./user_input/constraint_demand.csv")
+    rush_hours_input = pd.read_csv("./user_input/constraint_rush_hours.csv")
+    minimum_shifts_input = pd.read_csv("./user_input/constraint_min_shifts.csv")
+    market_hours_input = pd.read_csv("./user_input/constraint_market_hours.csv")
+
+    # Minimum Shifts: Convert to constraint format
+    input_parameters['minimum_shifts'] = {
         (c["day"], c["hour"], c["minute"]): int(c["min_shifts"])
-        for _, c in minimum_shifts.iterrows()
-    }
-    rush_hours = pd.read_csv("dallas_rush_hours.csv")
-    rush_hours = {
-        (c["hour"], c["minute"]): int(c["rush_hour"]) for _, c in rush_hours.iterrows()
-    }
-    demand = pd.read_csv("dallas_forecast_v3_clip.csv")
-    demand = {
-        (c["day"], c["hour"], c["minute"]): int(round(c["demand"]))
-        for _, c in demand.iterrows()
-    }
-    market_hours = pd.read_csv("dallas_market_hours.csv")
-    market_hours = {
-        (c["day"], c["hour"], c["minute"]): int(round(c["open"]))
-        for _, c in market_hours.iterrows()
+        for _, c in minimum_shifts_input.iterrows()
     }
 
-    inputs = {
-        "num_days": 1,
-        "num_hours": 24,
-        "num_minutes": 60,
-        "minutes_interval": 15,
-        "num_vehicles": 77,
-        "min_duration": 4 * 60,
-        "max_duration": 10 * 60,
-        "duration_step": 15,
-        "cost_vehicle_per_minute": 13.5 / 60,
-        "revenue_passenger": 13.5,
-        "max_starts_per_slot": 5,
-        "max_ends_per_slot": 5,
-        "minimum_shifts": minimum_shifts,
-        "rush_hours": rush_hours,
-        "demand": demand,
-        "market_hours": market_hours,
+    # Rush Hours: Convert to constraint format
+    input_parameters['rush_hours'] = {
+        (c["hour"], c["minute"]): int(c["rush_hour"]) for _, c in rush_hours_input.iterrows()
     }
-    compute_schedule(inputs)
+
+    # Demand: Convert to constraint format
+    input_parameters['demand'] = {
+        (c["day"], c["hour"], c["minute"]): int(round(c["demand"]))
+        for _, c in demand_input.iterrows()
+    }
+
+    # Market Hours: Convert to constraint format
+    input_parameters['market_hours'] = {
+        (c["day"], c["hour"], c["minute"]): int(round(c["open"]))
+        for _, c in market_hours_input.iterrows()
+    }
+
+    # RUN
+    compute_schedule(input_parameters)

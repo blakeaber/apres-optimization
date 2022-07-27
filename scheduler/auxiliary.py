@@ -1,4 +1,4 @@
-from scheduler import utils
+import utils
 
 def define_shift_state(model, all_days, all_hours, all_minutes, all_vehicles, all_duration):
     """Define the state of all shifts"""
@@ -107,7 +107,7 @@ def define_completion_rate(
                     completion_rate[(day, hour, minute)],
                     [
                         demand_input[(day, hour, minute)],
-                        utils._get_vehicles_in_time(
+                        utils.get_vehicles_in_time(
                             shifts_state, day, hour, minute, all_vehicles, all_duration
                         ),
                     ],

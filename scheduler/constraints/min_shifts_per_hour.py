@@ -1,4 +1,4 @@
-from scheduler import utils
+import utils
 
 
 def min_shifts_per_hour(
@@ -15,7 +15,7 @@ def min_shifts_per_hour(
     for day in all_days:
         for hour in all_hours:
             for minute in all_minutes:
-                vehicles = utils._get_vehicles_in_time(
+                vehicles = utils.get_vehicles_in_time(
                     shifts_state, day, hour, minute, all_vehicles, all_duration
                 )
                 model.Add(vehicles >= minimum_shifts[(day, hour, minute)])

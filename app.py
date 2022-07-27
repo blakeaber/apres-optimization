@@ -3,7 +3,7 @@
 
 from dash import Dash, html, dcc
 
-import front.forecast_view as fv
+# import front.forecast_view as fv
 import front.scheduler_view as sv
 
 app = Dash(__name__)
@@ -27,12 +27,12 @@ app.layout = html.Div(
         html.Div(
             children=dcc.Tabs(
                 [
-                    dcc.Tab(
-                        label="Forecast",
-                        children=fv.layout,
-                        style=tab_style,
-                        selected_style=tab_selected_style,
-                    ),
+                    # dcc.Tab(
+                    #     label="Forecast",
+                    #     children=fv.layout,
+                    #     style=tab_style,
+                    #     selected_style=tab_selected_style,
+                    # ),
                     dcc.Tab(
                         label="Scheduling",
                         children=sv.layout,

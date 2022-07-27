@@ -1,11 +1,13 @@
 import time
+import pandas as pd
 from ortools.sat.python import cp_model
 
 
 class SolutionCollector(cp_model.CpSolverSolutionCallback):
     # Class to print all solutions found
-    def __init__(self, variables):
+    def __init__(self, variables, columns):
         cp_model.CpSolverSolutionCallback.__init__(self)
+        self.__columns = columns
         self.__variables = variables
         self.__solution_count = 0
         self.__start_time = time.time()
@@ -15,26 +17,25 @@ class SolutionCollector(cp_model.CpSolverSolutionCallback):
         self.__solution_count += 1
 
         if self.ObjectiveValue() > self._best_solution:
-            print(
-                "Solution found:",
-                self.__solution_count,
-                "-",
-                self.ObjectiveValue(),
-                "-",
-                round(time.time() - self.__start_time, 2),
-            )
+            current_time = round(time.time() - self.__start_time, 2)
+            print(f'Solution found: {self.__solution_count} - {self.ObjectiveValue()} - {current_time}')
             arr = []
             for k, v in self.__variables[0].items():
                 if self.Value(v) == 1:
                     arr.append([k[0], k[1], k[2], k[3], k[4]])
             df = pd.DataFrame(
-                arr, columns=["day", "hour", "minute", "vehicle", "duration"]
+                arr, columns=self.__columns
             )
-            df.to_csv("best_solution.csv", index=False)
+            df.to_csv(f"./solutions/best_solution_{self.__solution_count}.csv", index=False)
         print()
 
 
-def _negated_bounded_span(shifts, start, length):
+def get_current_time():
+    t = time.localtime()
+    return time.strftime("%H:%M:%S", t)
+
+
+def negated_bounded_span(shifts, start, length):
     """From: https://github.com/google/or-tools/blob/master/examples/python/shift_scheduling_sat.py#L29
     Filters an isolated sub-sequence of variables assigned to True.
     Extract the span of Boolean variables [start, start + length), negate them,
@@ -60,7 +61,7 @@ def _negated_bounded_span(shifts, start, length):
     return sequence
 
 
-def _get_vehicles_in_time(shifts_state, day, hour, minute, all_vehicles, all_duration):
+def get_vehicles_in_time(shifts_state, day, hour, minute, all_vehicles, all_duration):
     """Return the number of vehicles for a given timestamp"""
     return cp_model.LinearExpr.Sum(
         [
