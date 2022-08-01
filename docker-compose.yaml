@@ -6,7 +6,7 @@ services:
     container_name: alto_scheduler
     restart: always
     ports:
-      - 80:80
+      - "8080:80"
     networks:
       - network
 networks:
