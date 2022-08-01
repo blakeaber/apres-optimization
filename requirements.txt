@@ -1,0 +1,8 @@
+dash
+dash_bootstrap_components
+gevent
+gunicorn
+ortools
+pandas
+plotly
+plotly_express

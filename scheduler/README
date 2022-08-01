@@ -10,3 +10,14 @@ The implemented constraints are:
 - Minimum shifts per hour
 - Max amount of shifts that can start/end per minute slot
 - Don't end during rush hours
+
+### V6
+Completely refactored code into separate directories and modules (for separation of concerns).
+The modules are:
+- `auxiliary.py`: defining auxiliary variables and KPIs used by the optimizer
+- `utils.py`: stores the SolutionCollector and other utility functions for the solver / app
+The directories are:
+- `constraints`: defining all constraints as functions to be referenced by the solver
+- `solutions`: a folder containing all possible solutions (in order) as the solver identifies them
+- `user_input`: a place for the inputs / parameters to be stored
+- `user_output`: a folder containing the optimal output of the solver
