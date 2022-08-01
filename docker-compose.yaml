@@ -1,0 +1,14 @@
+version: '3.7'
+services:
+  alto_scheduler:
+    build: 
+      context: ./
+    container_name: alto_scheduler
+    restart: always
+    ports:
+      - 80:80
+    networks:
+      - network
+networks:
+  network:
+    driver: bridge
