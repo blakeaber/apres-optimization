@@ -2,13 +2,11 @@
 import os
 import subprocess
 import pandas as pd
-import dash
-from dash import Dash, html, dcc, Output, callback, Input
-import dash_bootstrap_components as dbc
 import plotly.express as px
 
-
-layout = dbc.Card()
+import dash
+from dash import html, dcc, Output, callback, Input
+import dash_bootstrap_components as dbc
 
 
 layout = html.Div([
@@ -54,7 +52,7 @@ def run_script_onClick(n_clicks):
     for f in os.listdir("./scheduler/solutions"):
         os.remove(f'./scheduler/solutions/{f}')
 
-    _ = subprocess.Popen('python app_v1_6.py', shell=True, cwd='./scheduler')  
+    _ = subprocess.Popen('python optimizer_v1_6.py', shell=True, cwd='./scheduler')  
     return dbc.Alert("We're off and running! Will report back in a bit...", color="success")
 
 

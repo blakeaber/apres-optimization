@@ -1,11 +1,8 @@
-# Run this app with `python app.py` and
-# visit http://127.0.0.1:8050/ in your web browser.
-
 import dash
 from dash import html, callback, Input, Output
 import dash_bootstrap_components as dbc
 
-from front import import_view, parameters_view, review_view, optimize_view
+from front import import_view, parameters_view, optimize_view
 
 
 # APPLICATION SETUP
@@ -48,13 +45,11 @@ def tab_content(active_tab):
         return import_view.layout
     elif active_tab == 'tab-2':
         return parameters_view.layout
-    elif active_tab == 'tab-3':
-        return review_view.layout
     elif active_tab == 'tab-4':
         return optimize_view.layout
     else:
-        return review_view.layout
+        return import_view.layout
 
 
 if __name__ == "__main__":
-    app.run_server(debug=True)
+    app.run_server(debug=True, host="0.0.0.0", port=8080, use_reloader=True)
