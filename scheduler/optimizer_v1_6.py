@@ -1,15 +1,3 @@
-"""
-Constraints:
-- [x] Shift duration
-- [x] Number of vehicles (same as number of vehicles?)
-- [x] A vehicle can only be assigned to one shift per day
-- [x] The sum of assigned time must be at least of the shift duration
-- [x] The assigned shift slots must be consecutive
-- [x] Minimum shifts per hour
-- [x] Max amount of shifts that can start/end per minute slot
-- [x] Don't end during rush hours
-- [] Do not schedule shifts when the market is closed
-"""
 
 import time
 import json
@@ -238,13 +226,8 @@ def compute_schedule(payload: dict):
     solver.parameters.num_search_workers = 7  # this enables multi-core processing of the search space
     solver.parameters.enumerate_all_solutions = False  # cannot enumerate all solutions when solving in parallel
 
-    status = solver.Solve(
-        model, 
-        utils.SolutionCollector(
-            variables=[shifts_state, shifts_start, shifts_start], 
-            columns=["day", "hour", "minute", "vehicle", "duration"]
-        )
-    )
+    # solver callback to display and record interim solutions from the solver (on the journey to optimal solutions)
+    status = solver.Solve(model, utils.SolutionCollector(shifts_state))
 
     print(f'Time: {round(time.time() - t0, 2)} Seconds, {round((time.time() - t0) / 60, 2)} Minutes')
     print(f'At: {utils.get_current_time()}')
