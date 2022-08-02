@@ -5,28 +5,28 @@ from ortools.sat.python import cp_model
 
 class SolutionCollector(cp_model.CpSolverSolutionCallback):
     # Class to print all solutions found
-    def __init__(self, variables, columns):
+    def __init__(self, shifts_state):
         cp_model.CpSolverSolutionCallback.__init__(self)
-        self.__columns = columns
-        self.__variables = variables
+        self.__shifts_state = shifts_state
         self.__solution_count = 0
         self.__start_time = time.time()
         self._best_solution = 0
 
     def on_solution_callback(self):
         self.__solution_count += 1
+        current_score = self.ObjectiveValue()
 
-        if self.ObjectiveValue() > self._best_solution:
+        if current_score > self._best_solution:
             current_time = round(time.time() - self.__start_time, 2)
-            print(f'Solution found: {self.__solution_count} - {self.ObjectiveValue()} - {current_time}')
-            arr = []
-            for k, v in self.__variables[0].items():
+            print(f'Solution found: {self.__solution_count} - {current_score} - {current_time}')
+
+            shifts_state_values = []
+            for k, v in self.__shifts_state.items():
                 if self.Value(v) == 1:
-                    arr.append([k[0], k[1], k[2], k[3], k[4]])
-            df = pd.DataFrame(
-                arr, columns=self.__columns
-            )
+                    shifts_state_values.append([k[0], k[1], k[2], k[3], k[4], current_score])
+            df = pd.DataFrame(shifts_state_values, columns=["day", "hour", "minute", "vehicle", "duration", "score"])
             df.to_csv(f"./solutions/best_solution_{self.__solution_count}.csv", index=False)
+
         print()
 
 

@@ -9,6 +9,7 @@ from front import import_view, parameters_view, optimize_view
 # ------------------------------------
 app = dash.Dash(external_stylesheets=[dbc.themes.BOOTSTRAP], suppress_callback_exceptions=True)
 server = app.server
+app.title = 'Alto Scheduler'
 
 # LAYOUT
 app.layout = html.Div(
@@ -51,4 +52,4 @@ def tab_content(active_tab):
 
 
 if __name__ == "__main__":
-    app.run_server(debug=True, host="0.0.0.0", port=8080, use_reloader=True)
+    app.run_server(debug=True, host="0.0.0.0", port=8080, use_reloader=False)
