@@ -9,26 +9,50 @@ from dash import html, dcc, Output, callback, Input, State
 import dash_bootstrap_components as dbc
 
 
+# create output directories if not exists
+solutions_directory_path = './scheduler/solutions'
+directory_exists = os.path.exists(solutions_directory_path)
+if not directory_exists:
+    os.makedirs(solutions_directory_path)
+
+
 layout = html.Div([
     html.Div([
+        html.H3('Settings'),
+        html.Div(id='parameters-table'),
         dbc.Button('Start', id='start-button'), 
+        dcc.ConfirmDialog(
+            id='confirm-start',
+            message='This will stop any running scenarios. Are you sure?',
+        ),
         html.Div(id='output-container-button')
     ]),
+    
     html.Div(id='output-container'),
     dcc.Store(id='best-solution-data'),
     dcc.Store(id='best-schedule-data'),
-    dcc.Store(id='scheduler-process-id'),
     dcc.Interval(
         id='interval-component',
         interval=3*1000, # in milliseconds
         n_intervals=0
     )
-])                      
+])
+
+
+@callback(
+    Output('parameters-table', 'children'),
+    Input('start-button', 'n_clicks')
+)
+def display_parameters(n_clicks):
+    parameters_df = pd.read_json('./scheduler/user_input/parameters.json', lines=True).astype(int)
+    parameters_table1 = dbc.Table.from_dataframe(parameters_df.iloc[:, :5], striped=True, size='sm')
+    parameters_table2 = dbc.Table.from_dataframe(parameters_df.iloc[:, 5:], striped=True, size='sm')        
+    return html.Div([parameters_table1, parameters_table2])
 
 
 @callback(
     Output('output-container-button', 'children'),
-    Output('scheduler-process-id', 'data'),
+    Output('confirm-start', 'displayed'),
     Input('start-button', 'n_clicks')
 )
 def run_script_onClick(n_clicks):
@@ -39,9 +63,15 @@ def run_script_onClick(n_clicks):
     for f in os.listdir("./scheduler/solutions"):
         os.remove(f'./scheduler/solutions/{f}')
 
-    pid = subprocess.Popen('python optimizer_v1_6.py', shell=True, cwd='./scheduler')
-    alert = dbc.Alert(f"We're off and running (pid={pid.pid})! Will report back in a bit...", color="success")
-    return alert, pid.pid
+    # kill zombie optimization runs (if they exist)
+    delete_previous_runs = "ps aux | grep -ie 'python optimizer_' | awk '{print $2}' | xargs sudo kill -9"
+    _ = subprocess.Popen(delete_previous_runs, shell=True, cwd='./scheduler')
+    
+    # run latest scenario
+    _ = subprocess.Popen('python optimizer_v1_6.py', shell=True, cwd='./scheduler')
+
+    alert = dbc.Alert(f"We're off and running! Will report back in a bit...", color="success")
+    return alert, True
 
 
 @callback(Output('output-container', 'children'),
