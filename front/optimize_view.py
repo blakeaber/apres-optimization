@@ -65,7 +65,7 @@ def run_script_onClick(n_clicks, button_state):
 
     # kill zombie optimization runs (if they exist)
     delete_previous_runs = (
-        "ps aux | grep -ie '[p]ython optimizer_' | awk '{print $2}' | xargs kill -9"
+        "ps aux | grep -ie '[p]ython optimizer_' | awk '{print $2}' | xargs kill -9 $1"
     )
     _ = subprocess.run(delete_previous_runs, shell=True)
 
@@ -88,7 +88,7 @@ def run_script_onClick(n_clicks, button_state):
     State("start-button", "children"),
 )
 def check_for_execution(_, __, button_state):
-    get_process_time = "ps aux | grep -ie '[p]ython optimizer_' | awk '{print $10}'"
+    get_process_time = "ps aux | grep -ie '[p]ython optimizer_' | grep -v '/bin/sh' | awk '{print $10}'"
     if process_output := subprocess.run(
         get_process_time, shell=True, capture_output=True, text=True
     ).stdout:
