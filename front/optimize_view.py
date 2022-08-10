@@ -74,7 +74,7 @@ def run_script_onClick(n_clicks, button_state):
         # delete old solutions from previous runs
         for f in os.listdir("./scheduler/solutions"):
             os.remove(f"./scheduler/solutions/{f}")
-        _ = subprocess.run("python optimizer_v1_6.py", shell=True, cwd="./scheduler")
+        _ = subprocess.Popen("python optimizer_v1_6.py", shell=True, cwd="./scheduler")
 
     return True
 
