@@ -15,6 +15,10 @@ directory_exists = os.path.exists(solutions_directory_path)
 if not directory_exists:
     os.makedirs(solutions_directory_path)
 
+# Button states
+BUTTON_STATE_NO_EXECUTION = "Start"
+BUTTON_STATE_RUNNING_EXECUTION = "Cancel"
+
 
 layout = html.Div(
     [
@@ -22,7 +26,7 @@ layout = html.Div(
             [
                 html.H3("Settings"),
                 html.Div(id="parameters-table"),
-                dbc.Button("Start", id="start-button"),
+                dbc.Button(BUTTON_STATE_NO_EXECUTION, id="start-button"),
                 dcc.ConfirmDialog(
                     id="confirm-start",
                     message="This will stop any running scenarios. Are you sure?",
@@ -70,7 +74,7 @@ def run_script_onClick(n_clicks, button_state):
     _ = subprocess.run(delete_previous_runs, shell=True)
 
     # run latest scenario
-    if button_state == "Start":
+    if button_state == BUTTON_STATE_NO_EXECUTION:
         # delete old solutions from previous runs
         for f in os.listdir("./scheduler/solutions"):
             os.remove(f"./scheduler/solutions/{f}")
@@ -93,27 +97,38 @@ def check_for_execution(_, __, button_state):
         get_process_time, shell=True, capture_output=True, text=True
     ).stdout:
         process_info = f"The optimizer is running and looking for a solution! Current running time: {process_output} minutes."
-        return "Cancel", {"background": "red"}, process_info
+        return BUTTON_STATE_RUNNING_EXECUTION, {"background": "red"}, process_info
     else:
-        return "Start", None, None
+        return BUTTON_STATE_NO_EXECUTION, None, None
 
 
 @callback(
     Output("output-container", "children"),
     Input("best-solution-data", "data"),
     Input("best-schedule-data", "data"),
+    State("start-button", "children"),
 )
-def get_scheduler_best_solution(jsonified_solution_data, jsonified_schedule_data):
-    df_solution = pd.read_json(jsonified_solution_data, orient="split")
-    df_schedule = pd.read_json(jsonified_schedule_data, orient="split").sort_values(
-        ["start_time", "duration"], ascending=True
-    )
+def get_scheduler_best_solution(
+    jsonified_solution_data, jsonified_schedule_data, button_state
+):
+    if jsonified_solution_data:
+        df_solution = pd.read_json(jsonified_solution_data, orient="split")
+    if jsonified_schedule_data:
+        df_schedule = pd.read_json(jsonified_schedule_data, orient="split").sort_values(
+            ["start_time", "duration"], ascending=True
+        )
 
     all_solutions = [
         i for i in os.listdir("./scheduler/solutions") if i.startswith("best_solution_")
     ]
+    if not all_solutions:
+        if button_state == BUTTON_STATE_NO_EXECUTION:
+            return "No solution found for last run."
+        else:
+            return "No solution found yet..."
+
     best_solution_id = max(
-        [int(i[:-4].split("best_solution_")[1]) for i in all_solutions]
+        int(i[:-4].split("best_solution_")[1]) for i in all_solutions
     )
 
     schedule_fig = px.timeline(
@@ -170,7 +185,7 @@ def clean_data(n):
         i for i in os.listdir("./scheduler/solutions") if i.startswith("best_solution_")
     ]
     if (not n) or (not all_solutions):
-        return dash.no_update
+        return ""
     else:
         best_solution_id = max(
             [int(i[:-4].split("best_solution_")[1]) for i in all_solutions]
@@ -222,7 +237,7 @@ def clean_schedule_data(n):
         i for i in os.listdir("./scheduler/solutions") if i.startswith("best_solution_")
     ]
     if (not n) or (not all_solutions):
-        return dash.no_update
+        return ""
     else:
         best_solution_id = max(
             [int(i[:-4].split("best_solution_")[1]) for i in all_solutions]
