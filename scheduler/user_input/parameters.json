@@ -1,1 +1,1 @@
-{"num_vehicles": 20, "min_duration": 4, "max_duration": 10, "cost_vehicle_per_minute": 2, "revenue_passenger": 50, "max_starts_per_slot": 5, "max_ends_per_slot": 5, "enable_rush_hour_constraint": false, "enable_market_hour_constraint": true, "enable_min_shift_constraint": false}
+{"num_vehicles": 10, "min_duration": 4, "max_duration": 9, "cost_vehicle_per_minute": 2, "revenue_passenger": 51, "max_starts_per_slot": 10, "max_ends_per_slot": 10, "rush_hour_soft_constraint_cost": 51, "enable_market_hour_constraint": true, "enable_min_shift_constraint": false}

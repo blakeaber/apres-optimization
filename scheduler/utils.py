@@ -1,33 +1,5 @@
 import time
-import pandas as pd
 from ortools.sat.python import cp_model
-
-
-class SolutionCollector(cp_model.CpSolverSolutionCallback):
-    # Class to print all solutions found
-    def __init__(self, shifts_state):
-        cp_model.CpSolverSolutionCallback.__init__(self)
-        self.__shifts_state = shifts_state
-        self.__solution_count = 0
-        self.__start_time = time.time()
-        self._best_solution = 0
-
-    def on_solution_callback(self):
-        self.__solution_count += 1
-        current_score = self.ObjectiveValue()
-
-        if current_score > self._best_solution:
-            current_time = round(time.time() - self.__start_time, 2)
-            print(f'Solution found: {self.__solution_count} - {current_score} - {current_time}')
-
-            shifts_state_values = []
-            for k, v in self.__shifts_state.items():
-                if self.Value(v) == 1:
-                    shifts_state_values.append([k[0], k[1], k[2], k[3], k[4], current_score])
-            df = pd.DataFrame(shifts_state_values, columns=["day", "hour", "minute", "vehicle", "duration", "score"])
-            df.to_csv(f"./solutions/best_solution_{self.__solution_count}.csv", index=False)
-
-        print()
 
 
 def get_current_time():
@@ -77,4 +49,24 @@ def get_vehicles_in_time(shifts_state, day, hour, minute, all_vehicles, all_dura
             for vehicle in all_vehicles
             for duration in all_duration
         ]
+    )
+
+
+def get_vehicles_in_time_from_solver(
+    solver: cp_model.CpSolverSolutionCallback,
+    shifts_state,
+    day,
+    hour,
+    minute,
+    all_vehicles,
+    all_duration,
+):
+    """Return the number of vehicles for a given timestamp.
+
+    It uses the provided CpSolverSolutionCallback to get the assigned real values.
+    """
+    return sum(
+        solver.Value(shifts_state[day, hour, minute, vehicle, duration])
+        for vehicle in all_vehicles
+        for duration in all_duration
     )
