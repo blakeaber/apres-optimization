@@ -2,7 +2,7 @@ import time
 import pandas as pd
 from ortools.sat.python import cp_model
 
-import utils
+from auxiliary import get_vehicles_in_time, get_vehicles_in_time_from_solver
 
 
 def define_maximization_function(
@@ -24,7 +24,7 @@ def define_maximization_function(
         [
             (
                 completion_rate[(day, hour, minute)] * revenue_passenger
-                - utils.get_vehicles_in_time(
+                - get_vehicles_in_time(
                     shifts_state, day, hour, minute, all_vehicles, all_duration
                 )
                 * cost_vehicle_per_minute
@@ -79,7 +79,7 @@ def compute_maximization_function_components(
         (
             solver.Value(completion_rate[day, hour, minute]) * revenue_passenger
             - (
-                utils.get_vehicles_in_time_from_solver(
+                get_vehicles_in_time_from_solver(
                     solver, shifts_state, day, hour, minute, all_vehicles, all_duration
                 )
                 * cost_vehicle_per_minute

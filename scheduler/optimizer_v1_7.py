@@ -1,5 +1,7 @@
 import time
 import json
+from os.path import exists as file_exists
+
 import pandas as pd
 from ortools.sat.python import cp_model
 
@@ -14,6 +16,7 @@ from constraints import (
     max_start_and_end,
     rush_hours,
     market_hours,
+    fixed_shifts,
 )
 from auxiliary import (
     define_shift_state,
@@ -61,6 +64,9 @@ def compute_schedule(payload: dict):
 
     # Market minimum shifts
     minimum_shifts_input = payload["minimum_shifts"]
+
+    # Fixed shifts
+    fixed_shifts_input = payload["fixed_shifts"]
 
     # Demand
     demand_input = payload["demand"]
@@ -205,6 +211,13 @@ def compute_schedule(payload: dict):
             all_minutes,
             all_duration,
         )
+
+    # Constraint 8: Fixed shifts
+    fixed_shifts(
+        model,
+        shifts_state,
+        fixed_shifts_input,
+    )
 
     print(
         f"Time: {round(time.time() - t0, 2)} Seconds, {round((time.time() - t0) / 60, 2)} Minutes"
@@ -362,6 +375,27 @@ if __name__ == "__main__":
     rush_hours_input = pd.read_csv("./user_input/constraint_rush_hours.csv")
     minimum_shifts_input = pd.read_csv("./user_input/constraint_min_shifts.csv")
     market_hours_input = pd.read_csv("./user_input/constraint_market_hours.csv")
+    if file_exists("./user_input/constraint_fixed_shifts.csv"):
+        fixed_shifts_input = pd.read_csv("./user_input/constraint_fixed_shifts.csv")
+
+        # Validate input
+        invalid_shifts = utils.validate_fixed_shifts_input(
+            fixed_shifts_input,
+            input_parameters["duration_step"],
+            input_parameters["min_duration"],
+            input_parameters["max_duration"],
+            input_parameters["num_vehicles"],
+        )
+        if invalid_shifts:
+            print("Invalid fixed shifts provided. Stopping scheduler.")
+            for invalid in invalid_shifts:
+                print("Invalid shift id:", invalid[0], "- Reason:", invalid[1])
+            raise ValueError("Invalid fixed shifts provided. Stopping scheduler.")
+
+        # Fixed Shifts: Convert to list
+        input_parameters["fixed_shifts"] = fixed_shifts_input.iloc[:, 1:].to_numpy()
+    else:
+        input_parameters["fixed_shifts"] = []
 
     # Minimum Shifts: Convert to constraint format
     input_parameters["minimum_shifts"] = {
