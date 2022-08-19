@@ -131,6 +131,20 @@ def get_scheduler_best_solution(
         int(i[:-4].split("best_solution_")[1]) for i in all_solutions
     )
 
+    # Load the min_shifts to display them
+    minimum_shifts_input = (
+        pd.read_csv("./scheduler/user_input/constraint_min_shifts.csv")
+        .sort_values(["day", "hour", "minute"])
+        .reset_index(drop=True)
+    )
+    minimum_shifts_input["time"] = minimum_shifts_input.apply(
+        lambda row: f"{row['day'].astype(int)}-{row['hour'].astype(int)}-{row['minute'].astype(int)}",
+        axis=1,
+    )
+    minimum_shifts_input = minimum_shifts_input[
+        minimum_shifts_input["time"].isin(df_solution["time"])
+    ].reset_index(drop=True)
+
     schedule_fig = px.timeline(
         df_schedule, x_start="start_time", x_end="end_time", y="vehicle"
     )
@@ -155,6 +169,13 @@ def get_scheduler_best_solution(
         y=df_solution["ends"],
         name="ends",
         marker={"color": "red"},
+    )
+    fig.add_scatter(
+        x=minimum_shifts_input["time"],
+        y=minimum_shifts_input["min_shifts"],
+        name="min_shifts",
+        opacity=0.25,
+        line={"color": "purple", "dash": "dash"},
     )
     return html.Div(
         [

@@ -182,3 +182,45 @@ def get_vehicles_in_time_from_solver(
         for vehicle in all_vehicles
         for duration in all_duration
     )
+
+
+def define_min_shifts_to_vehicles_difference(
+    model,
+    shifts_state,
+    minimum_shifts_input,
+    num_vehicles,
+    all_days,
+    all_hours,
+    all_minutes,
+    all_vehicles,
+    all_duration,
+):
+    """Defines a new Int variable that will hold the number of vehicles needed to meet
+    the min_shifts requirement. Negative values are clamped to 0"""
+    vehicles_to_min_shifts = {}
+    for day in all_days:
+        for hour in all_hours:
+            for minute in all_minutes:
+                vehicles_to_min_shifts[(day, hour, minute)] = model.NewIntVar(
+                    -max(num_vehicles, minimum_shifts_input[(day, hour, minute)]),
+                    max(num_vehicles, minimum_shifts_input[(day, hour, minute)]),
+                    f"vehicles_to_min_shifts_d{day}_h{hour}_m{minute}",
+                )
+                model.AddMaxEquality(
+                    vehicles_to_min_shifts[(day, hour, minute)],
+                    [
+                        0,
+                        (
+                            minimum_shifts_input[(day, hour, minute)]
+                            - get_vehicles_in_time(
+                                shifts_state,
+                                day,
+                                hour,
+                                minute,
+                                all_vehicles,
+                                all_duration,
+                            )
+                        ),
+                    ],
+                )
+    return vehicles_to_min_shifts

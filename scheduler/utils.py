@@ -19,10 +19,19 @@ def validate_fixed_shifts_input(
 ) -> List[bool]:
     """Validates that the provided fixed shifts input contains well defined shifts"""
     invalid_shifts = []
+
+    shifts_num_vehicles = df["vehicle"].nunique()
+    if shifts_num_vehicles > num_vehicles:
+        invalid_shifts.append(
+            (
+                "_",
+                "The number of provided vehicles is bigger than the available vehicles.",
+            )
+        )
+
     for shift_id, group in df.groupby("shift_id"):
         shift_length = group["duration"]
         num_slots_worked = len(group)
-        shifts_num_vehicles = group["vehicle"].nunique()
 
         if shift_length.nunique() != 1:
             invalid_shifts.append(
@@ -43,11 +52,4 @@ def validate_fixed_shifts_input(
                 )
             )
 
-        if shifts_num_vehicles > num_vehicles:
-            invalid_shifts.append(
-                (
-                    shift_id,
-                    "The number of provided vehicles is bigger than the available vehicles.",
-                )
-            )
     return invalid_shifts

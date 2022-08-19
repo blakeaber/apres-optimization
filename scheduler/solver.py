@@ -11,6 +11,7 @@ def define_maximization_function(
     revenue_passenger,
     cost_vehicle_per_minute,
     rush_hour_input,
+    vehicles_to_min_shifts,
     all_vehicles,
     all_duration,
     shifts_end,
@@ -18,8 +19,35 @@ def define_maximization_function(
     all_hours,
     all_minutes,
     rush_hour_soft_constraint_cost,
+    minimum_shifts_soft_constraint_cost,
 ):
     """Returns an OrTools maximization function"""
+
+    def _define_rush_hour_soft_constraint(day, hour, minute):
+        return (
+            cp_model.LinearExpr.Sum(
+                [
+                    shifts_end[
+                        (
+                            driver,
+                            day,
+                            hour,
+                            minute,
+                        )
+                    ]
+                    for driver in all_vehicles
+                ]
+            )
+            * rush_hour_input[(hour, minute)]
+            * rush_hour_soft_constraint_cost
+        )
+
+    def _define_minimum_shifts_soft_constraint(day, hour, minute):
+        return (
+            vehicles_to_min_shifts[(day, hour, minute)]
+            * minimum_shifts_soft_constraint_cost
+        )
+
     return cp_model.LinearExpr.Sum(
         [
             (
@@ -29,23 +57,8 @@ def define_maximization_function(
                 )
                 * cost_vehicle_per_minute
             )
-            - (
-                cp_model.LinearExpr.Sum(
-                    [
-                        shifts_end[
-                            (
-                                driver,
-                                day,
-                                hour,
-                                minute,
-                            )
-                        ]
-                        for driver in all_vehicles
-                    ]
-                )
-                * rush_hour_input[(hour, minute)]
-                * rush_hour_soft_constraint_cost
-            )
+            - _define_rush_hour_soft_constraint(day, hour, minute)
+            - _define_minimum_shifts_soft_constraint(day, hour, minute)
             for day in all_days
             for hour in all_hours
             for minute in all_minutes
@@ -60,6 +73,7 @@ def compute_maximization_function_components(
     revenue_passenger,
     cost_vehicle_per_minute,
     rush_hour_input,
+    vehicles_to_min_shifts,
     all_vehicles,
     all_duration,
     shifts_end,
@@ -67,6 +81,7 @@ def compute_maximization_function_components(
     all_hours,
     all_minutes,
     rush_hour_soft_constraint_cost,
+    minimum_shifts_soft_constraint_cost,
 ):
     """Computes and returns the final value of the maximization function.
 
@@ -90,13 +105,25 @@ def compute_maximization_function_components(
         for minute in all_minutes
     )
 
-    soft_constraints = sum(
-        sum(
-            solver.Value(shifts_end[driver, day, hour, minute])
-            for driver in all_vehicles
+    def _define_rush_hours_soft(day, hour, minute):
+        return (
+            sum(
+                solver.Value(shifts_end[driver, day, hour, minute])
+                for driver in all_vehicles
+            )
+            * rush_hour_input[hour, minute]
+            * rush_hour_soft_constraint_cost
         )
-        * rush_hour_input[hour, minute]
-        * rush_hour_soft_constraint_cost
+
+    def _define_minimum_shifts_soft(day, hour, minute):
+        return (
+            solver.Value(vehicles_to_min_shifts[(day, hour, minute)])
+            * minimum_shifts_soft_constraint_cost
+        )
+
+    soft_constraints = sum(
+        _define_rush_hours_soft(day, hour, minute)
+        + _define_minimum_shifts_soft(day, hour, minute)
         for day in all_days
         for hour in all_hours
         for minute in all_minutes
@@ -114,6 +141,7 @@ class SolutionCollector(cp_model.CpSolverSolutionCallback):
         revenue_passenger,
         cost_vehicle_per_minute,
         rush_hour_input,
+        vehicles_to_min_shifts,
         all_vehicles,
         all_duration,
         shifts_end,
@@ -121,6 +149,7 @@ class SolutionCollector(cp_model.CpSolverSolutionCallback):
         all_hours,
         all_minutes,
         rush_hour_soft_constraint_cost,
+        minimum_shifts_soft_constraint_cost,
     ):
         cp_model.CpSolverSolutionCallback.__init__(self)
         self.__shifts_state = shifts_state
@@ -128,6 +157,7 @@ class SolutionCollector(cp_model.CpSolverSolutionCallback):
         self.__revenue_passenger = revenue_passenger
         self.__cost_vehicle_per_minute = cost_vehicle_per_minute
         self.__rush_hour_input = rush_hour_input
+        self.__vehicles_to_min_shifts = vehicles_to_min_shifts
         self.__all_vehicles = all_vehicles
         self.__all_duration = all_duration
         self.__shifts_end = shifts_end
@@ -135,6 +165,7 @@ class SolutionCollector(cp_model.CpSolverSolutionCallback):
         self.__all_hours = all_hours
         self.__all_minutes = all_minutes
         self.__rush_hour_soft_constraint_cost = rush_hour_soft_constraint_cost
+        self.__minimum_shifts_soft_constraint_cost = minimum_shifts_soft_constraint_cost
         self.__solution_count = 0
         self.__start_time = time.time()
         self._best_solution = 0
@@ -152,6 +183,7 @@ class SolutionCollector(cp_model.CpSolverSolutionCallback):
                 self.__revenue_passenger,
                 self.__cost_vehicle_per_minute,
                 self.__rush_hour_input,
+                self.__vehicles_to_min_shifts,
                 self.__all_vehicles,
                 self.__all_duration,
                 self.__shifts_end,
@@ -159,6 +191,7 @@ class SolutionCollector(cp_model.CpSolverSolutionCallback):
                 self.__all_hours,
                 self.__all_minutes,
                 self.__rush_hour_soft_constraint_cost,
+                self.__minimum_shifts_soft_constraint_cost,
             )
             print(
                 f"Solution found: {self.__solution_count} - {current_score}$ ({real}$ from real -{constraints}$ from soft constraints) - {current_time} seconds"

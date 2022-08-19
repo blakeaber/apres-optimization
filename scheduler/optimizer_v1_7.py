@@ -25,6 +25,7 @@ from auxiliary import (
     define_shifts_end,
     define_rush_hour,
     define_completion_rate,
+    define_min_shifts_to_vehicles_difference,
 )
 
 
@@ -47,8 +48,9 @@ def compute_schedule(payload: dict):
 
     # Constraint Flags
     enable_min_shift_constraint = payload["enable_min_shift_constraint"]
-    # enable_rush_hour_constraint = payload["enable_rush_hour_constraint"]
+    enable_rush_hour_constraint = payload["enable_rush_hour_constraint"]
     rush_hour_soft_constraint_cost = payload["rush_hour_soft_constraint_cost"]
+    minimum_shifts_soft_constraint_cost = payload["minimum_shifts_soft_constraint_cost"]
     enable_market_hour_constraint = payload["enable_market_hour_constraint"]
 
     # The states is [day, start_hour, start_minute, end_hour, end_minute, vehicle_id, shift_hours]
@@ -88,7 +90,6 @@ def compute_schedule(payload: dict):
     shifts_end = define_shifts_end(
         model, all_days, all_hours, all_minutes, all_vehicles
     )
-    # rush_hour = define_rush_hour(model, all_hours, all_minutes, rush_hour_input)
 
     # Defining KPI Variable
     completion_rate = define_completion_rate(
@@ -149,20 +150,7 @@ def compute_schedule(payload: dict):
         minutes_interval,
     )
 
-    # Constraint 4: Minimum shifts per hour
-    if enable_min_shift_constraint:
-        min_shifts_per_hour(
-            model,
-            shifts_state,
-            minimum_shifts_input,
-            all_days,
-            all_hours,
-            all_vehicles,
-            all_minutes,
-            all_duration,
-        )
-
-    # # Constraint 5: Max amount of shifts that can start/end at the same time
+    # # Constraint 4: Max amount of shifts that can start/end at the same time
     # Populate auxiliary variables
     shift_span(
         model,
@@ -192,11 +180,42 @@ def compute_schedule(payload: dict):
         max_ends_per_slot,
     )
 
+    # Constraint 5: Minimum shifts per hour
+    # This is also a soft-constraint, but if the hard-constraint is enabled the soft
+    # do not play any role
+    if enable_min_shift_constraint:
+        min_shifts_per_hour(
+            model,
+            shifts_state,
+            minimum_shifts_input,
+            all_days,
+            all_hours,
+            all_vehicles,
+            all_minutes,
+            all_duration,
+        )
+    # Define a new variable to keep track of the difference between the min_shifts and
+    # the actual vehicles. We need this to use the max() function in the solver
+    vehicles_to_min_shifts = define_min_shifts_to_vehicles_difference(
+        model,
+        shifts_state,
+        minimum_shifts_input,
+        num_vehicles,
+        all_days,
+        all_hours,
+        all_minutes,
+        all_vehicles,
+        all_duration,
+    )
+
     # Constraint 6: DO not end during rush hours
-    # if enable_rush_hour_constraint:
-    #    rush_hours(
-    #        model, shifts_end, rush_hour, all_vehicles, all_days, all_hours, all_minutes
-    #    )
+    # This is also a soft-constraint, but if the hard-constraint is enabled the soft
+    # do not play any role
+    if enable_rush_hour_constraint:
+        rush_hour = define_rush_hour(model, all_hours, all_minutes, rush_hour_input)
+        rush_hours(
+            model, shifts_end, rush_hour, all_vehicles, all_days, all_hours, all_minutes
+        )
 
     # Constraint 7: No shifts during market closed hours
     # There are different ways to do this, i.e. `OnlyEnforceIf`, but I think this is the easiest and simplest one
@@ -234,6 +253,7 @@ def compute_schedule(payload: dict):
             revenue_passenger,
             cost_vehicle_per_minute,
             rush_hour_input,
+            vehicles_to_min_shifts,
             all_vehicles,
             all_duration,
             shifts_end,
@@ -241,6 +261,7 @@ def compute_schedule(payload: dict):
             all_hours,
             all_minutes,
             rush_hour_soft_constraint_cost,
+            minimum_shifts_soft_constraint_cost,
         )
     )
 
@@ -268,6 +289,7 @@ def compute_schedule(payload: dict):
             revenue_passenger,
             cost_vehicle_per_minute,
             rush_hour_input,
+            vehicles_to_min_shifts,
             all_vehicles,
             all_duration,
             shifts_end,
@@ -275,6 +297,7 @@ def compute_schedule(payload: dict):
             all_hours,
             all_minutes,
             rush_hour_soft_constraint_cost,
+            minimum_shifts_soft_constraint_cost,
         ),
     )
 
