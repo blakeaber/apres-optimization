@@ -1,4 +1,3 @@
-
 from constraints.one_shift_per_day import one_shift_per_day
 from constraints.shift_min_duration import shift_min_duration
 from constraints.shifts_contiguous import shifts_contiguous
@@ -7,3 +6,4 @@ from constraints.shift_span import shift_span
 from constraints.max_start_and_end import max_start_and_end
 from constraints.rush_hours import rush_hours
 from constraints.market_hours import market_hours
+from constraints.fixed_shifts import fixed_shifts

@@ -1,5 +1,8 @@
+"""Non OrTools related auxiliary functions"""
 import time
-from ortools.sat.python import cp_model
+from typing import List
+
+import pandas as pd
 
 
 def get_current_time():
@@ -7,66 +10,44 @@ def get_current_time():
     return time.strftime("%H:%M:%S", t)
 
 
-def negated_bounded_span(shifts, start, length):
-    """From: https://github.com/google/or-tools/blob/master/examples/python/shift_scheduling_sat.py#L29
-    Filters an isolated sub-sequence of variables assigned to True.
-    Extract the span of Boolean variables [start, start + length), negate them,
-    and if there is variables to the left/right of this span, surround the span by
-    them in non negated form.
-    Args:
-        shifts: a list of shifts to extract the span from.
-        start: the start to the span.
-        length: the length of the span.
-    Returns:
-        a list of variables which conjunction will be false if the sub-list is
-        assigned to True, and correctly bounded by variables assigned to False,
-        or by the start or end of works.
-    """
-    sequence = []
-    # Left border (start of works, or works[start - 1])
-    if start > 0:
-        sequence.append(shifts[start - 1])
-    sequence.extend(shifts[start + i].Not() for i in range(length))
-    # Right border (end of works or works[start + length])
-    if start + length < len(shifts):
-        sequence.append(shifts[start + length])
-    return sequence
+def validate_fixed_shifts_input(
+    df: pd.DataFrame,
+    duration_step: int,
+    min_duration: int,
+    max_duration: int,
+    num_vehicles: int,
+) -> List[bool]:
+    """Validates that the provided fixed shifts input contains well defined shifts"""
+    invalid_shifts = []
+    for shift_id, group in df.groupby("shift_id"):
+        shift_length = group["duration"]
+        num_slots_worked = len(group)
+        shifts_num_vehicles = group["vehicle"].nunique()
 
+        if shift_length.nunique() != 1:
+            invalid_shifts.append(
+                (shift_id, "Shift duration must be constant per shift.")
+            )
 
-def get_vehicles_in_time(shifts_state, day, hour, minute, all_vehicles, all_duration):
-    """Return the number of vehicles for a given timestamp"""
-    return cp_model.LinearExpr.Sum(
-        [
-            shifts_state[
+        if not shift_length.between(min_duration, max_duration).all():
+            invalid_shifts.append(
+                (shift_id, "Shift duration is out of min/max provided bounds.")
+            )
+
+        shift_length = shift_length.iloc[0]
+        if num_slots_worked * duration_step != shift_length:
+            invalid_shifts.append(
                 (
-                    day,
-                    hour,
-                    minute,
-                    vehicle,
-                    duration,
+                    shift_id,
+                    "Shift duration is spands more/less than the provided number of observations.",
                 )
-            ]
-            for vehicle in all_vehicles
-            for duration in all_duration
-        ]
-    )
+            )
 
-
-def get_vehicles_in_time_from_solver(
-    solver: cp_model.CpSolverSolutionCallback,
-    shifts_state,
-    day,
-    hour,
-    minute,
-    all_vehicles,
-    all_duration,
-):
-    """Return the number of vehicles for a given timestamp.
-
-    It uses the provided CpSolverSolutionCallback to get the assigned real values.
-    """
-    return sum(
-        solver.Value(shifts_state[day, hour, minute, vehicle, duration])
-        for vehicle in all_vehicles
-        for duration in all_duration
-    )
+        if shifts_num_vehicles > num_vehicles:
+            invalid_shifts.append(
+                (
+                    shift_id,
+                    "The number of provided vehicles is bigger than the available vehicles.",
+                )
+            )
+    return invalid_shifts
