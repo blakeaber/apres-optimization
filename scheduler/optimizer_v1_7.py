@@ -331,12 +331,24 @@ if __name__ == "__main__":
     #     lambda row: f"{row['day'].astype(int)}-{row['hour'].astype(int)}-{row['minute'].astype(int)}",
     #     axis=1,
     # )
+    # minimum_shifts_input = (
+    #     pd.read_csv("./user_input/constraint_min_shifts.csv")
+    #     .sort_values(["day", "hour", "minute"])
+    #     .reset_index(drop=True)
+    # )
+    # minimum_shifts_input["time"] = minimum_shifts_input.apply(
+    #     lambda row: f"{row['day'].astype(int)}-{row['hour'].astype(int)}-{row['minute'].astype(int)}",
+    #     axis=1,
+    # )
     # for run, df in enumerate(all_solutions):
     #     df = df.sort_values(["day", "hour", "minute"]).reset_index(drop=True)
     #     df["time"] = df.apply(
     #         lambda row: f"{row['day'].astype(int)}-{row['hour'].astype(int)}-{row['minute'].astype(int)}",
     #         axis=1,
     #     )
+    #     minimum_shifts_input = minimum_shifts_input[
+    #         minimum_shifts_input["time"].isin(df["time"])
+    #     ].reset_index(drop=True)
 
     #     starts = df.groupby("vehicle").first().groupby("time").size()
     #     ends = df.groupby("vehicle").last().groupby("time").size()
@@ -373,6 +385,13 @@ if __name__ == "__main__":
     #         y=df["ends"],
     #         name="ends",
     #         marker={"color": "red"},
+    #     )
+    #     fig.add_scatter(
+    #         x=minimum_shifts_input["time"],
+    #         y=minimum_shifts_input["min_shifts"],
+    #         name="min_shifts",
+    #         opacity=0.25,
+    #         line={"color": "purple", "dash": "dash"},
     #     )
 
     #     fig.write_image(f"./images/{i}.png")
