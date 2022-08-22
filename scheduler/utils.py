@@ -3,7 +3,7 @@ import pandas as pd
 from ortools.sat.python import cp_model
 
 
-def get_solution_from_states_df(df, heartbeat):
+def get_solution_from_states_df(df: pd.DataFrame, heartbeat):
     df = df.sort_values(["day", "hour", "minute"]).reset_index(drop=True)
     df["time"] = df.apply(
         lambda row: f"{row['day'].astype(int)}-{row['hour'].astype(int)}-{row['minute'].astype(int)}",
@@ -18,7 +18,9 @@ def get_solution_from_states_df(df, heartbeat):
     df.columns = ["vehicles", "starts", "ends"]
     df = df.astype(int).reset_index()
 
-    demand = pd.read_json(heartbeat.payload.demand_forecast)
+    demand = pd.read_json(
+        heartbeat.payload.dynamic_variables.demand_forecast.json(), orient="split"
+    )
     demand["time"] = demand.apply(
         lambda row: f"{row['day'].astype(int)}-{row['hour'].astype(int)}-{row['minute'].astype(int)}",
         axis=1,
@@ -28,7 +30,7 @@ def get_solution_from_states_df(df, heartbeat):
         df.merge(demand, on="time")
         .sort_values(["day", "hour", "minute"])
         .reset_index(drop=True)
-        .to_json(orient='split')
+        .to_json(orient="split")
     )
 
 
@@ -64,7 +66,7 @@ def get_schedule_from_states_df(df):
     schedule_df["end_time"] = schedule_df.apply(
         lambda row: row.start_time + pd.Timedelta(minutes=row.duration), axis=1
     )
-    return schedule_df.to_json(orient='split')
+    return schedule_df.to_json(orient="split")
 
 
 class SolutionCollector(cp_model.CpSolverSolutionCallback):
@@ -76,7 +78,6 @@ class SolutionCollector(cp_model.CpSolverSolutionCallback):
         self.__solution_count = 0
         self.__start_time = time.time()
         self._best_solution = 0
-        
 
     def on_solution_callback(self):
         self.__solution_count += 1
@@ -84,17 +85,29 @@ class SolutionCollector(cp_model.CpSolverSolutionCallback):
 
         if current_score > self._best_solution:
             current_time = round(time.time() - self.__start_time, 2)
-            print(f'Solution found: {self.__solution_count} - {current_score} - {current_time}')
+            print(
+                f"Solution found: {self.__solution_count} - {current_score} - {current_time}"
+            )
 
             shifts_state_values = []
             for k, v in self.__shifts_state.items():
                 if self.Value(v) == 1:
-                    shifts_state_values.append([k[0], k[1], k[2], k[3], k[4], current_score])
+                    shifts_state_values.append(
+                        [k[0], k[1], k[2], k[3], k[4], current_score]
+                    )
 
-            df = pd.DataFrame(shifts_state_values, columns=["day", "hour", "minute", "vehicle", "duration", "score"])
-            df.to_csv(f"./solutions/best_solution_{self.__solution_count}.csv", index=False)
+            df = pd.DataFrame(
+                shifts_state_values,
+                columns=["day", "hour", "minute", "vehicle", "duration", "score"],
+            )
+            df.to_csv(
+                f"./scheduler/solutions/best_solution_{self.__solution_count}.csv",
+                index=False,
+            )
 
-            self.__heartbeat.solution = get_solution_from_states_df(df)
+            self.__heartbeat.solution = get_solution_from_states_df(
+                df, self.__heartbeat
+            )
             self.__heartbeat.schedule = get_schedule_from_states_df(df)
 
             self.__heartbeat.score = current_score
