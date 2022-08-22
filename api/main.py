@@ -2,7 +2,15 @@ from fastapi import FastAPI, BackgroundTasks
 from .objects import OptimizerInput, HeartbeatStatus
 from scheduler.optimizer_v1_7 import compute_schedule
 
-optimizer = FastAPI()
+optimizer = FastAPI(
+    title="Alto Scheduler API",
+    description="This API allows to trigger the Alto vehicle scheduler and fetch it's output.",
+    version="1.7",
+    contact={
+        "name": "Matt Waite",
+        "email": "matt@apres.io",
+    },
+)
 
 # Define the global Heartbeat that will be updated by the endpoints & scheduler
 heartbeat = HeartbeatStatus()

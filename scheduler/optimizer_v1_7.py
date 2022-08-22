@@ -98,6 +98,7 @@ def compute_schedule(heartbeat: HeartbeatStatus):
     }
 
     heartbeat.stage = "Defining Auxiliary Variables"
+    print("Defining Auxiliary Variables")
 
     # Define Auxiliary Variables
     shifts_state = define_shift_state(
@@ -126,6 +127,7 @@ def compute_schedule(heartbeat: HeartbeatStatus):
     )
 
     heartbeat.stage = "Defining Constraints"
+    print("Defining Constraints")
 
     # Constraint 1: A vehicle can only be assigned to a shift per day
     one_shift_per_day(
@@ -230,6 +232,7 @@ def compute_schedule(heartbeat: HeartbeatStatus):
         )
 
     heartbeat.stage = "Constructing Optimization Problem"
+    print("Constructing Optimization Problem")
 
     # Maximize the revenue (completion_rate*revenue - occupancy*cost = completion_rate * revenue_per_passenger - activer_vehicle * cost_per_vehicle)
     model.Maximize(
@@ -248,6 +251,7 @@ def compute_schedule(heartbeat: HeartbeatStatus):
     )
 
     heartbeat.stage = "Finding Solutions"
+    print("Finding Solutions")
 
     solver = cp_model.CpSolver()
     solver.parameters.num_search_workers = (
