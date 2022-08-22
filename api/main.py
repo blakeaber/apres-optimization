@@ -1,15 +1,18 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, BackgroundTasks
 from .objects import OptimizerInput, HeartbeatStatus
 from scheduler.optimizer_v1_7 import compute_schedule
 
-optimizer = FastAPI(debug=True)
+optimizer = FastAPI()
 
+# Define the global Heartbeat that will be updated by the endpoints & scheduler
 heartbeat = HeartbeatStatus()
 heartbeat.version = 1.7
 
 
 @optimizer.get("/heartbeat/")
-async def optimizer_heartbeat():
+def optimizer_heartbeat():
+    """Returns the current status of the scheduler.
+    Use it to know when the scheduler is running or has found a solution."""
     return dict(
         run_id=heartbeat.payload.run_id
         if heartbeat.payload and hasattr(heartbeat, "payload")
@@ -22,13 +25,20 @@ async def optimizer_heartbeat():
 
 
 @optimizer.post("/input/")
-async def optimizer_input(payload: OptimizerInput):
+def optimizer_input(payload: OptimizerInput, background_tasks: BackgroundTasks):
+    """Given a valid input payload triggers a scheduler execution."""
     heartbeat.payload = payload
-    compute_schedule(heartbeat)
+    heartbeat.reset()  # Reset the output fields for a new run
+    background_tasks.add_task(
+        compute_schedule, heartbeat
+    )  # Let FastAPI run this in another thread, so it doesn't fully block the API
+    return {f"Scheduler started with run_id: {heartbeat.payload.run_id}."}
 
 
 @optimizer.get("/output/")
-async def optimizer_output():
+def optimizer_output():
+    """Returns the heartbeat information (like `/heartbeat/`) but includes the output
+    of the last best step inside the fields `solution` and `schedule`"""
     return heartbeat.dict()
 
 
