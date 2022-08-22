@@ -30,7 +30,7 @@ def get_solution_from_states_df(df: pd.DataFrame, heartbeat):
         df.merge(demand, on="time")
         .sort_values(["day", "hour", "minute"])
         .reset_index(drop=True)
-        .to_json(orient="split")
+        .to_dict(orient="split")
     )
 
 
@@ -66,7 +66,7 @@ def get_schedule_from_states_df(df):
     schedule_df["end_time"] = schedule_df.apply(
         lambda row: row.start_time + pd.Timedelta(minutes=row.duration), axis=1
     )
-    return schedule_df.to_json(orient="split")
+    return schedule_df.to_dict(orient="split")
 
 
 class SolutionCollector(cp_model.CpSolverSolutionCallback):

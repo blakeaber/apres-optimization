@@ -1,3 +1,4 @@
+import os
 import time
 import json
 import pandas as pd
@@ -249,6 +250,10 @@ def compute_schedule(heartbeat: HeartbeatStatus):
             ]
         )
     )
+
+    # Everything was setup fine, remove previous solutions before starting the solver
+    for f in os.listdir("./scheduler/solutions"):
+        os.remove(f"./scheduler/solutions/{f}")
 
     heartbeat.stage = "Finding Solutions"
     print("Finding Solutions")
