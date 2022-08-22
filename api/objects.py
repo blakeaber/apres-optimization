@@ -40,11 +40,11 @@ class OptimizerInput(BaseModel):
     dynamic_variables: DynamicVariables
 
 
-class HeartbeatStatus(object):
+class HeartbeatStatus(BaseModel):
     version: float = 1.0
     stage: str = "No Stage Set"
     step: int = 0
     score: int = 0
-    payload: OptimizerInput
-    solution: VectorDataFrame
-    schedule: VectorDataFrame
+    payload: OptimizerInput = None
+    solution: VectorDataFrame = None
+    schedule: VectorDataFrame = None

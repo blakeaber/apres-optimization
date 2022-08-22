@@ -4,14 +4,16 @@ from scheduler.optimizer_v1_7 import compute_schedule
 
 optimizer = FastAPI(debug=True)
 
-heartbeat = HeartbeatStatus
+heartbeat = HeartbeatStatus()
 heartbeat.version = 1.7
 
 
 @optimizer.get("/heartbeat/")
 async def optimizer_heartbeat():
     return dict(
-        run_id=heartbeat.payload.run_id if hasattr(heartbeat, "payload") else None,
+        run_id=heartbeat.payload.run_id
+        if heartbeat.payload and hasattr(heartbeat, "payload")
+        else None,
         version=heartbeat.version,
         stage=heartbeat.stage,
         step=heartbeat.step,
@@ -27,7 +29,7 @@ async def optimizer_input(payload: OptimizerInput):
 
 @optimizer.get("/output/")
 async def optimizer_output():
-    return heartbeat.to_dict()
+    return heartbeat.dict()
 
 
 @optimizer.get("/")
