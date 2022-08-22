@@ -1,0 +1,7 @@
+FROM python:3.8
+COPY requirements_api.txt ./requirements_api.txt
+RUN pip install --no-cache-dir --upgrade -r requirements_api.txt
+COPY ./app.py ./
+COPY ./scheduler ./scheduler
+COPY ./api ./api
+CMD ["uvicorn", "api.main:optimizer", "--host", "0.0.0.0", "--port", "80"]
