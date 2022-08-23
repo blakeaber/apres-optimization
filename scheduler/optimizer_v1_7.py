@@ -98,7 +98,7 @@ def compute_schedule(heartbeat: HeartbeatStatus):
         ).iterrows()
     }
 
-    heartbeat.stage = "Defining Auxiliary Variables"
+    heartbeat.set_stage(1)
     print("Defining Auxiliary Variables")
 
     # Define Auxiliary Variables
@@ -127,7 +127,7 @@ def compute_schedule(heartbeat: HeartbeatStatus):
         shifts_state,
     )
 
-    heartbeat.stage = "Defining Constraints"
+    heartbeat.set_stage(2)
     print("Defining Constraints")
 
     # Constraint 1: A vehicle can only be assigned to a shift per day
@@ -232,7 +232,7 @@ def compute_schedule(heartbeat: HeartbeatStatus):
             all_duration,
         )
 
-    heartbeat.stage = "Constructing Optimization Problem"
+    heartbeat.set_stage(3)
     print("Constructing Optimization Problem")
 
     # Maximize the revenue (completion_rate*revenue - occupancy*cost = completion_rate * revenue_per_passenger - activer_vehicle * cost_per_vehicle)
@@ -255,7 +255,7 @@ def compute_schedule(heartbeat: HeartbeatStatus):
     for f in os.listdir("./scheduler/solutions"):
         os.remove(f"./scheduler/solutions/{f}")
 
-    heartbeat.stage = "Finding Solutions"
+    heartbeat.set_stage(4)
     print("Finding Solutions")
 
     solver = cp_model.CpSolver()
@@ -272,7 +272,7 @@ def compute_schedule(heartbeat: HeartbeatStatus):
     if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
         print(f"Maximum of objective function: {solver.ObjectiveValue()}\n")
         sol_type = "Optimal" if status == cp_model.OPTIMAL else "Feasible"
-        heartbeat.stage = f"Scheduler finished - {sol_type} solution found."
+        heartbeat.set_stage(5, f"Scheduler finished - {sol_type} solution found.")
     else:
         print("No solution found.")
-        heartbeat.stage = "Scheduler finished - No solution found."
+        heartbeat.set_stage(5, "Scheduler finished - No solution found.")

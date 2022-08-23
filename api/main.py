@@ -1,4 +1,5 @@
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI, BackgroundTasks, HTTPException
+
 from .objects import OptimizerInput, HeartbeatStatus
 from scheduler.optimizer_v1_7 import compute_schedule
 
@@ -26,6 +27,7 @@ def optimizer_heartbeat():
         if heartbeat.payload and hasattr(heartbeat, "payload")
         else None,
         version=heartbeat.version,
+        stage_id=heartbeat.stage_id,
         stage=heartbeat.stage,
         step=heartbeat.step,
         score=heartbeat.score,
@@ -35,6 +37,12 @@ def optimizer_heartbeat():
 @optimizer.post("/input/")
 def optimizer_input(payload: OptimizerInput, background_tasks: BackgroundTasks):
     """Given a valid input payload triggers a scheduler execution."""
+    # Check that we are in a valid stage to start the scheduler
+    if heartbeat.stage_id not in [0, 5]:
+        raise HTTPException(
+            status_code=404,
+            detail="Cannot start a scheduler run while a previous run is still running. Check `/heartbeat/`",
+        )
     heartbeat.payload = payload
     heartbeat.reset()  # Reset the output fields for a new run
     background_tasks.add_task(

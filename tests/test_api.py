@@ -23,6 +23,7 @@ def test_heartbeat_not_init():
     assert response.json() == {
         "run_id": None,
         "version": 1.7,
+        "stage_id": 0,
         "stage": "No Stage Set",
         "step": 0,
         "score": 0,
@@ -40,6 +41,7 @@ def test_output_not_init(mocker):
     assert response.status_code == 200
     assert response.json() == {
         "version": 1.7,
+        "stage_id": 0,
         "stage": "No Stage Set",
         "step": 0,
         "score": 0,
@@ -910,3 +912,20 @@ def test_invalid_input(mocker):
         ]
     }
     m.assert_not_called()
+
+
+def test_already_running_input(mocker):
+    """Tests that the scheduler is not called when it is already running."""
+    with open("./api/payloads/input.json", "r") as f:
+        json_input = json.load(f)
+
+    test_heartbeat = HeartbeatStatus()
+    test_heartbeat.version = 1.7
+    test_heartbeat.stage_id = 2
+    m = mocker.patch("api.main.heartbeat", return_value=test_heartbeat)
+
+    response = client.post("/input/", json=json_input)
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Cannot start a scheduler run while a previous run is still running. Check `/heartbeat/`"
+    }

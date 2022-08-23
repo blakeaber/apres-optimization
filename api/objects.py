@@ -55,6 +55,7 @@ class HeartbeatStatus(BaseModel):
     """Main object to keep track of scheduler executions."""
 
     version: float = 1.0
+    stage_id: int = 0
     stage: str = "No Stage Set"
     step: int = 0
     score: int = 0
@@ -62,9 +63,31 @@ class HeartbeatStatus(BaseModel):
     solution: VectorDataFrame = None
     schedule: VectorDataFrame = None
 
+    def set_stage(self, id: int, final_stage_message: str = "Scheduler finished"):
+        """Sets the stage given its ID. `final_stage_message` specifies a custom message
+        for when the scheduler has finished"""
+        if id == 0:
+            self.stage_id = 0
+            self.stage = "No Stage Set"
+        elif id == 1:
+            self.stage_id = 1
+            self.stage = "Defining Auxiliary Variables"
+        elif id == 2:
+            self.stage_id = 2
+            self.stage = "Defining Constraints"
+        elif id == 3:
+            self.stage_id = 3
+            self.stage = "Constructing Optimization Problem"
+        elif id == 4:
+            self.stage_id = 4
+            self.stage = "Finding Solutions"
+        elif id == 5:
+            self.stage_id = 5
+            self.stage = final_stage_message
+
     def reset(self):
         """Resets the output fields `stage, step, score, solution & scheduler`"""
-        self.stage = "No Stage Set"
+        self.set_stage(0)
         self.step = 0
         self.score = 0
         self.solution = None
