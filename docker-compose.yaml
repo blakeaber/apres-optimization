@@ -10,15 +10,16 @@ services:
       - "80:80"
     networks:
       - network
-  # alto_fe:
-  #   build: 
-  #     context: ./
-  #   container_name: alto_fe
-  #   restart: always
-  #   ports:
-  #     - "8080:80"
-  #   networks:
-  #     - network
+  alto_app:
+    build:
+      context: ./
+      dockerfile: Dockerfile_app
+    container_name: alto_app
+    restart: always
+    ports:
+      - "8080:80"
+    networks:
+      - network
 networks:
   network:
     driver: bridge

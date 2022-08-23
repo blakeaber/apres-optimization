@@ -1,6 +1,6 @@
 FROM python:3.8
-COPY requirements.txt ./requirements.txt
-RUN pip install -r requirements.txt
+COPY requirements_app.txt ./requirements_app.txt
+RUN pip install -r requirements_app.txt
 COPY ./app.py ./
 COPY ./front ./front
 COPY ./scheduler ./scheduler
