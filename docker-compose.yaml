@@ -9,7 +9,7 @@ services:
     ports:
       - "80:80"
     networks:
-      - network
+      - alto_network
   alto_app:
     build:
       context: ./
@@ -17,9 +17,9 @@ services:
     container_name: alto_app
     restart: always
     ports:
-      - "8080:80"
+      - "8080:8080"
     networks:
-      - network
+      - alto_network
 networks:
-  network:
+  alto_network:
     driver: bridge
