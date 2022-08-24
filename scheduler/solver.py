@@ -28,8 +28,19 @@ def get_solution_from_states_df(df: pd.DataFrame, heartbeat):
         axis=1,
     )
 
+    if heartbeat.payload.dynamic_variables.minimum_shifts:
+        min_shifts = pd.read_json(
+            heartbeat.payload.dynamic_variables.minimum_shifts.json(), orient="split"
+        )
+        min_shifts["time"] = min_shifts.apply(
+            lambda row: f"{row['day'].astype(int)}-{row['hour'].astype(int)}-{row['minute'].astype(int)}",
+            axis=1,
+        )
+        min_shifts = min_shifts.drop(columns=["day", "hour", "minute"])
+
     return (
         df.merge(demand, on="time")
+        .merge(min_shifts, on="time")
         .sort_values(["day", "hour", "minute"])
         .reset_index(drop=True)
         .to_dict(orient="split")

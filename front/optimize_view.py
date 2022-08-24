@@ -140,6 +140,16 @@ def display_current_solution(current_heartbeat):
         marker={"color": "red"},
     )
 
+    # Min shifts if present
+    if "min_shifts" in df_solution:
+        fig.add_scatter(
+            x=df_solution["time"],
+            y=df_solution["min_shifts"],
+            name="min_shifts",
+            opacity=0.25,
+            line={"color": "purple", "dash": "dash"},
+        )
+
     # Parameters
     parameters_df = (
         pd.DataFrame.from_dict(
