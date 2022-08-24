@@ -2,7 +2,73 @@ import time
 import pandas as pd
 from ortools.sat.python import cp_model
 
-from auxiliary import get_vehicles_in_time, get_vehicles_in_time_from_solver
+from .auxiliary import get_vehicles_in_time, get_vehicles_in_time_from_solver
+
+
+def get_solution_from_states_df(df: pd.DataFrame, heartbeat):
+    df = df.sort_values(["day", "hour", "minute"]).reset_index(drop=True)
+    df["time"] = df.apply(
+        lambda row: f"{row['day'].astype(int)}-{row['hour'].astype(int)}-{row['minute'].astype(int)}",
+        axis=1,
+    )
+
+    starts = df.groupby("vehicle").first().groupby("time").size()
+    ends = df.groupby("vehicle").last().groupby("time").size()
+    df = df.groupby("time").size()
+
+    df = pd.concat([df, starts, ends], axis=1).fillna(0)
+    df.columns = ["vehicles", "starts", "ends"]
+    df = df.astype(int).reset_index()
+
+    demand = pd.read_json(
+        heartbeat.payload.dynamic_variables.demand_forecast.json(), orient="split"
+    )
+    demand["time"] = demand.apply(
+        lambda row: f"{row['day'].astype(int)}-{row['hour'].astype(int)}-{row['minute'].astype(int)}",
+        axis=1,
+    )
+
+    return (
+        df.merge(demand, on="time")
+        .sort_values(["day", "hour", "minute"])
+        .reset_index(drop=True)
+        .to_dict(orient="split")
+    )
+
+
+def get_schedule_from_states_df(df):
+    def get_start_time(df):
+        """Based on the optimal schedule CSV, get the start times and duration (per vehicle)"""
+        df = df.sort_values(["day", "hour", "minute"], ascending=True)
+        return df.iloc[0][["day", "hour", "minute", "duration"]]
+
+    df = df.sort_values(["day", "hour", "minute"]).reset_index(drop=True)
+    df["time"] = df.apply(
+        lambda row: f"{row['day'].astype(int)}-{row['hour'].astype(int)}-{row['minute'].astype(int)}",
+        axis=1,
+    )
+
+    # Gantt chart: vehicle start times and duration (based on optimal schedules)
+    schedule_df = (
+        df.groupby("vehicle")
+        .apply(get_start_time)
+        .sort_values(["day", "hour", "minute"], ascending=True)
+        .reset_index(drop=True)
+    )
+    schedule_df.index.name = "vehicle"
+    schedule_df.reset_index(inplace=True)
+
+    # Gantt chart: starting and ending timestamps
+    schedule_df["start_time"] = pd.to_datetime(
+        schedule_df.apply(
+            lambda row: f"{row.hour.astype(int)}-{row.minute.astype(int)}", axis=1
+        ),
+        format="%H-%M",
+    )
+    schedule_df["end_time"] = schedule_df.apply(
+        lambda row: row.start_time + pd.Timedelta(minutes=row.duration), axis=1
+    )
+    return schedule_df.to_dict(orient="split")
 
 
 def define_maximization_function(
@@ -136,6 +202,7 @@ class SolutionCollector(cp_model.CpSolverSolutionCallback):
     # Class to print all solutions found
     def __init__(
         self,
+        heartbeat,
         shifts_state,
         completion_rate,
         revenue_passenger,
@@ -152,6 +219,7 @@ class SolutionCollector(cp_model.CpSolverSolutionCallback):
         minimum_shifts_soft_constraint_cost,
     ):
         cp_model.CpSolverSolutionCallback.__init__(self)
+        self.__heartbeat = heartbeat
         self.__shifts_state = shifts_state
         self.__completion_rate = completion_rate
         self.__revenue_passenger = revenue_passenger
@@ -168,7 +236,7 @@ class SolutionCollector(cp_model.CpSolverSolutionCallback):
         self.__minimum_shifts_soft_constraint_cost = minimum_shifts_soft_constraint_cost
         self.__solution_count = 0
         self.__start_time = time.time()
-        self._best_solution = 0
+        self._best_solution = -1e6
 
     def on_solution_callback(self):
         self.__solution_count += 1
@@ -208,7 +276,16 @@ class SolutionCollector(cp_model.CpSolverSolutionCallback):
                 columns=["day", "hour", "minute", "vehicle", "duration", "score"],
             )
             df.to_csv(
-                f"./solutions/best_solution_{self.__solution_count}.csv", index=False
+                f"./scheduler/solutions/best_solution_{self.__solution_count}.csv",
+                index=False,
             )
+
+            self.__heartbeat.solution = get_solution_from_states_df(
+                df, self.__heartbeat
+            )
+            self.__heartbeat.schedule = get_schedule_from_states_df(df)
+
+            self.__heartbeat.score = current_score
+            self.__heartbeat.step = self.__solution_count
 
         print()

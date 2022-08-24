@@ -1,7 +1,6 @@
 """Non OrTools related auxiliary functions"""
 import time
 from typing import List
-
 import pandas as pd
 
 

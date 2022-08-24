@@ -1,9 +1,8 @@
 import os
 import pandas as pd
+from api.objects import HeartbeatStatus
 from ortools.sat.python import cp_model
 
-from api.objects import HeartbeatStatus
-from .solver import define_maximization_function, SolutionCollector
 from .constraints import (
     one_shift_per_day,
     shift_min_duration,
@@ -13,7 +12,6 @@ from .constraints import (
     max_start_and_end,
     rush_hours,
     market_hours,
-    fixed_shifts,
 )
 from .auxiliary import (
     define_shift_state,
@@ -22,8 +20,9 @@ from .auxiliary import (
     define_shifts_end,
     define_rush_hour,
     define_completion_rate,
-    define_min_shifts_to_vehicles_difference,
+    get_vehicles_in_time,
 )
+from .solver import SolutionCollector
 
 
 def compute_schedule(heartbeat: HeartbeatStatus):
@@ -46,12 +45,6 @@ def compute_schedule(heartbeat: HeartbeatStatus):
     revenue_passenger = heartbeat.payload.static_variables.revenue_passenger
     max_starts_per_slot = heartbeat.payload.static_variables.max_starts_per_slot
     max_ends_per_slot = heartbeat.payload.static_variables.max_ends_per_slot
-    rush_hour_soft_constraint_cost = (
-        heartbeat.payload.static_variables.rush_hour_soft_constraint_cost
-    )
-    minimum_shifts_soft_constraint_cost = (
-        heartbeat.payload.static_variables.minimum_shifts_soft_constraint_cost
-    )
 
     # Constraint Flags
     enable_min_shift_constraint = (
@@ -72,6 +65,14 @@ def compute_schedule(heartbeat: HeartbeatStatus):
     all_vehicles = range(num_vehicles)
     all_duration = range(min_duration, max_duration, duration_step)
 
+    # Rush Hours: Convert to constraint format
+    rush_hour_input = {
+        (c["hour"], c["minute"]): int(c["rush_hour"])
+        for _, c in pd.read_json(
+            heartbeat.payload.dynamic_variables.rush_hours.json(), orient="split"
+        ).iterrows()
+    }
+
     # Demand: Convert to constraint format
     demand_input = {
         (c["day"], c["hour"], c["minute"]): int(round(c["demand"]))
@@ -80,50 +81,21 @@ def compute_schedule(heartbeat: HeartbeatStatus):
         ).iterrows()
     }
 
-    # Rush Hours: Convert to constraint format
-    if heartbeat.payload.dynamic_variables.rush_hours:
-        rush_hour_input = {
-            (c["hour"], c["minute"]): int(c["rush_hour"])
-            for _, c in pd.read_json(
-                heartbeat.payload.dynamic_variables.rush_hours.json(), orient="split"
-            ).iterrows()
-        }
-    else:
-        rush_hour_input = None
-
     # Market Hours: Convert to constraint format
-    if heartbeat.payload.dynamic_variables.market_hours:
-        market_hours_input = {
-            (c["day"], c["hour"], c["minute"]): int(round(c["open"]))
-            for _, c in pd.read_json(
-                heartbeat.payload.dynamic_variables.market_hours.json(), orient="split"
-            ).iterrows()
-        }
-    else:
-        market_hours_input = None
+    market_hours_input = {
+        (c["day"], c["hour"], c["minute"]): int(round(c["open"]))
+        for _, c in pd.read_json(
+            heartbeat.payload.dynamic_variables.market_hours.json(), orient="split"
+        ).iterrows()
+    }
 
     # Minimum Shifts: Convert to constraint format
-    if heartbeat.payload.dynamic_variables.minimum_shifts:
-        minimum_shifts_input = {
-            (c["day"], c["hour"], c["minute"]): int(c["min_shifts"])
-            for _, c in pd.read_json(
-                heartbeat.payload.dynamic_variables.minimum_shifts.json(),
-                orient="split",
-            ).iterrows()
-        }
-    else:
-        minimum_shifts_input = None
-
-    # Fixed shifts: Convert to constraint format
-    if heartbeat.payload.dynamic_variables.fixed_shifts:
-        fixed_shifts_input = {
-            (c["day"], c["hour"], c["minute"]): int(c["min_shifts"])
-            for _, c in pd.read_json(
-                heartbeat.payload.dynamic_variables.fixed_shifts.json(), orient="split"
-            ).iterrows()
-        }
-    else:
-        fixed_shifts_input = None
+    minimum_shifts_input = {
+        (c["day"], c["hour"], c["minute"]): int(c["min_shifts"])
+        for _, c in pd.read_json(
+            heartbeat.payload.dynamic_variables.minimum_shifts.json(), orient="split"
+        ).iterrows()
+    }
 
     heartbeat.set_stage(1)
     print("Defining Auxiliary Variables")
@@ -139,6 +111,7 @@ def compute_schedule(heartbeat: HeartbeatStatus):
     shifts_end = define_shifts_end(
         model, all_days, all_hours, all_minutes, all_vehicles
     )
+    rush_hour = define_rush_hour(model, all_hours, all_minutes, rush_hour_input)
 
     # Defining KPI Variable
     completion_rate = define_completion_rate(
@@ -195,7 +168,20 @@ def compute_schedule(heartbeat: HeartbeatStatus):
         minutes_interval,
     )
 
-    # # Constraint 4: Max amount of shifts that can start/end at the same time
+    # Constraint 4: Minimum shifts per hour
+    if enable_min_shift_constraint:
+        min_shifts_per_hour(
+            model,
+            shifts_state,
+            minimum_shifts_input,
+            all_days,
+            all_hours,
+            all_vehicles,
+            all_minutes,
+            all_duration,
+        )
+
+    # # Constraint 5: Max amount of shifts that can start/end at the same time
     # Populate auxiliary variables
     shift_span(
         model,
@@ -225,46 +211,15 @@ def compute_schedule(heartbeat: HeartbeatStatus):
         max_ends_per_slot,
     )
 
-    # Constraint 5: Minimum shifts per hour
-    # This is also a soft-constraint, but if the hard-constraint is enabled the soft
-    # do not play any role
-    if enable_min_shift_constraint and minimum_shifts_input:
-        min_shifts_per_hour(
-            model,
-            shifts_state,
-            minimum_shifts_input,
-            all_days,
-            all_hours,
-            all_vehicles,
-            all_minutes,
-            all_duration,
-        )
-    # Define a new variable to keep track of the difference between the min_shifts and
-    # the actual vehicles. We need this to use the max() function in the solver
-    vehicles_to_min_shifts = define_min_shifts_to_vehicles_difference(
-        model,
-        shifts_state,
-        minimum_shifts_input,
-        num_vehicles,
-        all_days,
-        all_hours,
-        all_minutes,
-        all_vehicles,
-        all_duration,
-    )
-
     # Constraint 6: DO not end during rush hours
-    # This is also a soft-constraint, but if the hard-constraint is enabled the soft
-    # do not play any role
     if enable_rush_hour_constraint:
-        rush_hour = define_rush_hour(model, all_hours, all_minutes, rush_hour_input)
         rush_hours(
             model, shifts_end, rush_hour, all_vehicles, all_days, all_hours, all_minutes
         )
 
     # Constraint 7: No shifts during market closed hours
     # There are different ways to do this, i.e. `OnlyEnforceIf`, but I think this is the easiest and simplest one
-    if enable_market_hour_constraint and market_hours_input:
+    if enable_market_hour_constraint:
         market_hours(
             model,
             shifts_state,
@@ -276,34 +231,22 @@ def compute_schedule(heartbeat: HeartbeatStatus):
             all_duration,
         )
 
-    # Constraint 8: Fixed shifts
-    if fixed_shifts_input:
-        fixed_shifts(
-            model,
-            shifts_state,
-            fixed_shifts_input,
-        )
-
     heartbeat.set_stage(3)
     print("Constructing Optimization Problem")
 
     # Maximize the revenue (completion_rate*revenue - occupancy*cost = completion_rate * revenue_per_passenger - activer_vehicle * cost_per_vehicle)
     model.Maximize(
-        define_maximization_function(
-            shifts_state,
-            completion_rate,
-            revenue_passenger,
-            cost_vehicle_per_minute,
-            rush_hour_input,
-            vehicles_to_min_shifts,
-            all_vehicles,
-            all_duration,
-            shifts_end,
-            all_days,
-            all_hours,
-            all_minutes,
-            rush_hour_soft_constraint_cost,
-            minimum_shifts_soft_constraint_cost,
+        cp_model.LinearExpr.Sum(
+            [
+                completion_rate[(day, hour, minute)] * revenue_passenger
+                - get_vehicles_in_time(
+                    shifts_state, day, hour, minute, all_vehicles, all_duration
+                )
+                * cost_vehicle_per_minute
+                for day in all_days
+                for hour in all_hours
+                for minute in all_minutes
+            ]
         )
     )
 
@@ -323,26 +266,7 @@ def compute_schedule(heartbeat: HeartbeatStatus):
     )
 
     # solver callback to display and record interim solutions from the solver (on the journey to optimal solutions)
-    status = solver.Solve(
-        model,
-        SolutionCollector(
-            heartbeat,
-            shifts_state,
-            completion_rate,
-            revenue_passenger,
-            cost_vehicle_per_minute,
-            rush_hour_input,
-            vehicles_to_min_shifts,
-            all_vehicles,
-            all_duration,
-            shifts_end,
-            all_days,
-            all_hours,
-            all_minutes,
-            rush_hour_soft_constraint_cost,
-            minimum_shifts_soft_constraint_cost,
-        ),
-    )
+    status = solver.Solve(model, SolutionCollector(shifts_state, heartbeat))
 
     if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
         print(f"Maximum of objective function: {solver.ObjectiveValue()}\n")

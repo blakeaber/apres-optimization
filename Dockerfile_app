@@ -1,0 +1,8 @@
+FROM python:3.8
+COPY requirements_app.txt ./requirements_app.txt
+RUN pip install -r requirements_app.txt
+COPY ./app.py ./
+COPY ./front ./front
+COPY ./scheduler ./scheduler
+COPY ./others ./others
+CMD gunicorn --workers 4 --worker-class gevent --timeout 30 --bind 0.0.0.0:8080 app:server 

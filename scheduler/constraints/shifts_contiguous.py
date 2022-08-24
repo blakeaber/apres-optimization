@@ -1,4 +1,4 @@
-from auxiliary import negated_bounded_span
+from scheduler.auxiliary import negated_bounded_span
 
 
 def shifts_contiguous(
