@@ -1,12 +1,13 @@
 import os
 import subprocess
+import json
+
 import pandas as pd
 import plotly.express as px
-
 import dash
 from dash import html, dcc, Output, callback, Input, State
-from dash.exceptions import PreventUpdate
 import dash_bootstrap_components as dbc
+import requests
 
 
 # create output directories if not exists
@@ -17,7 +18,7 @@ if not directory_exists:
 
 # Button states
 BUTTON_STATE_NO_EXECUTION = "Start"
-BUTTON_STATE_RUNNING_EXECUTION = "Cancel"
+BUTTON_STATE_RUNNING_EXECUTION = "Running"
 
 
 layout = html.Div(
@@ -26,7 +27,7 @@ layout = html.Div(
             [
                 html.H3("Settings"),
                 html.Div(id="parameters-table"),
-                dbc.Button(BUTTON_STATE_NO_EXECUTION, id="start-button"),
+                dbc.Button(BUTTON_STATE_NO_EXECUTION, id="start-button", disabled=True),
                 dcc.ConfirmDialog(
                     id="confirm-start",
                     message="This will stop any running scenarios. Are you sure?",
@@ -35,27 +36,12 @@ layout = html.Div(
             ]
         ),
         html.Div(id="output-container"),
-        dcc.Store(id="best-solution-data"),
-        dcc.Store(id="best-schedule-data"),
+        dcc.Store(id="current-heartbeat"),
         dcc.Interval(
             id="interval-component", interval=3 * 1000, n_intervals=0  # in milliseconds
         ),
     ]
 )
-
-
-@callback(Output("parameters-table", "children"), Input("start-button", "n_clicks"))
-def display_parameters(n_clicks):
-    parameters_df = pd.read_json(
-        "./scheduler/user_input/parameters.json", lines=True
-    ).astype(int)
-    parameters_table1 = dbc.Table.from_dataframe(
-        parameters_df.iloc[:, :5], striped=True, size="sm"
-    )
-    parameters_table2 = dbc.Table.from_dataframe(
-        parameters_df.iloc[:, 5:], striped=True, size="sm"
-    )
-    return html.Div([parameters_table1, parameters_table2])
 
 
 @callback(
@@ -75,61 +61,58 @@ def run_script_onClick(n_clicks, button_state):
 
     # run latest scenario
     if button_state == BUTTON_STATE_NO_EXECUTION:
-        # delete old solutions from previous runs
-        for f in os.listdir("./scheduler/solutions"):
-            os.remove(f"./scheduler/solutions/{f}")
-        _ = subprocess.Popen("python optimizer_v1_6.py", shell=True, cwd="./scheduler")
+        pass
 
     return True
 
 
 @callback(
     Output("start-button", "children"),
-    Output("start-button", "style"),
     Output("output-container-button", "children"),
-    Input("start-button", "n_clicks"),
+    Output("current-heartbeat", "data"),
     Input("interval-component", "n_intervals"),
-    State("start-button", "children"),
 )
-def check_for_execution(_, __, button_state):
-    get_process_time = "ps aux | grep -ie '[p]ython optimizer_' | grep -v '/bin/sh' | awk '{print $10}'"
-    if process_output := subprocess.run(
-        get_process_time, shell=True, capture_output=True, text=True
-    ).stdout:
-        process_info = f"The optimizer is running and looking for a solution! Current running time: {process_output} minutes."
-        return BUTTON_STATE_RUNNING_EXECUTION, {"background": "red"}, process_info
-    else:
-        return BUTTON_STATE_NO_EXECUTION, None, None
+def check_for_execution(_):
+    # Directly download the output
+    try:
+        response = requests.get("http://alto_api/output/")
+    except Exception:
+        # Try to connect to localhost if running in debug mode
+        response = requests.get("http://0.0.0.0/output/")
+
+    data = response.json()
+    if data["stage_id"] == 0:
+        return (
+            BUTTON_STATE_NO_EXECUTION,
+            "No scheduler execution detected.",
+            data,
+        )
+    return (
+        BUTTON_STATE_RUNNING_EXECUTION,
+        f"The optimizer is running and looking for a solution! Current stage: {data['stage']}.",
+        data,
+    )
 
 
 @callback(
     Output("output-container", "children"),
-    Input("best-solution-data", "data"),
-    Input("best-schedule-data", "data"),
-    State("start-button", "children"),
+    Output("parameters-table", "children"),
+    Input("current-heartbeat", "data"),
 )
-def get_scheduler_best_solution(
-    jsonified_solution_data, jsonified_schedule_data, button_state
-):
-    if jsonified_solution_data:
-        df_solution = pd.read_json(jsonified_solution_data, orient="split")
-    if jsonified_schedule_data:
-        df_schedule = pd.read_json(jsonified_schedule_data, orient="split").sort_values(
-            ["start_time", "duration"], ascending=True
-        )
+def display_current_solution(current_heartbeat):
+    if current_heartbeat["stage_id"] < 4:
+        return dash.no_update
 
-    all_solutions = [
-        i for i in os.listdir("./scheduler/solutions") if i.startswith("best_solution_")
-    ]
-    if not all_solutions:
-        if button_state == BUTTON_STATE_NO_EXECUTION:
-            return "No solution found for last run."
-        else:
-            return "No solution found yet..."
-
-    best_solution_id = max(
-        int(i[:-4].split("best_solution_")[1]) for i in all_solutions
+    solution_data, schedule_data = (
+        current_heartbeat["solution"],
+        current_heartbeat["schedule"],
     )
+    if solution_data:
+        df_solution = pd.read_json(json.dumps(solution_data), orient="split")
+    if schedule_data:
+        df_schedule = pd.read_json(
+            json.dumps(schedule_data), orient="split"
+        ).sort_values(["start_time", "duration"], ascending=True)
 
     schedule_fig = px.timeline(
         df_schedule, x_start="start_time", x_end="end_time", y="vehicle"
@@ -142,7 +125,7 @@ def get_scheduler_best_solution(
         df_solution,
         x="time",
         y=["vehicles", "demand"],
-        title=f"Best solution (run #{best_solution_id}) with {df_solution['starts'].sum()} vehicles",
+        title=f"Best solution (run #{current_heartbeat['step']}) with {df_solution['starts'].sum()} vehicles",
     )
     fig.add_bar(
         x=df_solution["time"],
@@ -156,6 +139,22 @@ def get_scheduler_best_solution(
         name="ends",
         marker={"color": "red"},
     )
+
+    # Parameters
+    parameters_df = (
+        pd.DataFrame.from_dict(
+            current_heartbeat["payload"]["static_variables"], orient="index"
+        )
+        .transpose()
+        .astype(str)
+    )
+    parameters_table1 = dbc.Table.from_dataframe(
+        parameters_df.iloc[:, [0, 1, 2, 5, 6]], striped=True, size="sm"
+    )
+    parameters_table2 = dbc.Table.from_dataframe(
+        parameters_df.iloc[:, 7:], striped=True, size="sm"
+    )
+
     return html.Div(
         [
             html.Div(
@@ -173,131 +172,30 @@ def get_scheduler_best_solution(
                 ]
             ),
         ]
-    )
-
-
-@callback(
-    Output("best-solution-data", "data"), Input("interval-component", "n_intervals")
-)
-def clean_data(n):
-
-    all_solutions = [
-        i for i in os.listdir("./scheduler/solutions") if i.startswith("best_solution_")
-    ]
-    if (not n) or (not all_solutions):
-        return ""
-    else:
-        best_solution_id = max(
-            [int(i[:-4].split("best_solution_")[1]) for i in all_solutions]
-        )
-
-        df = (
-            pd.read_csv(f"./scheduler/solutions/best_solution_{best_solution_id}.csv")
-            .sort_values(["day", "hour", "minute"])
-            .reset_index(drop=True)
-        )
-        df["time"] = df.apply(
-            lambda row: f"{row['day'].astype(int)}-{row['hour'].astype(int)}-{row['minute'].astype(int)}",
-            axis=1,
-        )
-
-        starts = df.groupby("vehicle").first().groupby("time").size()
-        ends = df.groupby("vehicle").last().groupby("time").size()
-        df = df.groupby("time").size()
-
-        df = pd.concat([df, starts, ends], axis=1).fillna(0)
-        df.columns = ["vehicles", "starts", "ends"]
-        df = df.astype(int).reset_index()
-
-        demand = pd.read_csv(f"./scheduler/user_input/constraint_demand.csv")
-        demand["time"] = demand.apply(
-            lambda row: f"{row['day'].astype(int)}-{row['hour'].astype(int)}-{row['minute'].astype(int)}",
-            axis=1,
-        )
-
-        df = (
-            df.merge(demand, on="time")
-            .sort_values(["day", "hour", "minute"])
-            .reset_index(drop=True)
-        )
-
-        return df.to_json(date_format="iso", orient="split")
-
-
-@callback(
-    Output("best-schedule-data", "data"), Input("interval-component", "n_intervals")
-)
-def clean_schedule_data(n):
-    def get_start_time(df):
-        """Based on the optimal schedule CSV, get the start times and duration (per vehicle)"""
-        df = df.sort_values(["day", "hour", "minute"], ascending=True)
-        return df.iloc[0][["day", "hour", "minute", "duration"]]
-
-    all_solutions = [
-        i for i in os.listdir("./scheduler/solutions") if i.startswith("best_solution_")
-    ]
-    if (not n) or (not all_solutions):
-        return ""
-    else:
-        best_solution_id = max(
-            [int(i[:-4].split("best_solution_")[1]) for i in all_solutions]
-        )
-
-        df = (
-            pd.read_csv(f"./scheduler/solutions/best_solution_{best_solution_id}.csv")
-            .sort_values(["day", "hour", "minute"])
-            .reset_index(drop=True)
-        )
-        df["time"] = df.apply(
-            lambda row: f"{row['day'].astype(int)}-{row['hour'].astype(int)}-{row['minute'].astype(int)}",
-            axis=1,
-        )
-
-        # Gantt chart: vehicle start times and duration (based on optimal schedules)
-        schedule_df = (
-            df.groupby("vehicle")
-            .apply(get_start_time)
-            .sort_values(["day", "hour", "minute"], ascending=True)
-            .reset_index(drop=True)
-        )
-        schedule_df.index.name = "vehicle"
-        schedule_df.reset_index(inplace=True)
-
-        # Gantt chart: starting and ending timestamps
-        schedule_df["start_time"] = pd.to_datetime(
-            schedule_df.apply(
-                lambda row: f"{row.hour.astype(int)}-{row.minute.astype(int)}", axis=1
-            ),
-            format="%H-%M",
-        )
-        schedule_df["end_time"] = schedule_df.apply(
-            lambda row: row.start_time + pd.Timedelta(minutes=row.duration), axis=1
-        )
-
-        return schedule_df.to_json(date_format="iso", orient="split")
+    ), html.Div([parameters_table1, parameters_table2])
 
 
 @callback(
     Output("best-solution-download", "data"),
     Input("solution-download-button", "n_clicks"),
-    State("best-solution-data", "data"),
+    State("current-heartbeat", "data"),
 )
-def func(n_clicks, jsonified_cleaned_data):
+def func(n_clicks, current_heartbeat):
     if not n_clicks:
         return dash.no_update
-    else:
-        df = pd.read_json(jsonified_cleaned_data, orient="split")
-        return dcc.send_data_frame(df.to_csv, "best_solution.csv")
+
+    df = pd.read_json(json.dumps(current_heartbeat["solution"]), orient="split")
+    return dcc.send_data_frame(df.to_csv, "best_solution.csv")
 
 
 @callback(
     Output("best-schedule-download", "data"),
     Input("schedule-download-button", "n_clicks"),
-    State("best-schedule-data", "data"),
+    State("current-heartbeat", "data"),
 )
-def func(n_clicks, jsonified_cleaned_data):
+def func(n_clicks, current_heartbeat):
     if not n_clicks:
         return dash.no_update
-    else:
-        df = pd.read_json(jsonified_cleaned_data, orient="split")
-        return dcc.send_data_frame(df.to_csv, "best_schedule.csv")
+
+    df = pd.read_json(json.dumps(current_heartbeat["schedule"]), orient="split")
+    return dcc.send_data_frame(df.to_csv, "best_schedule.csv")

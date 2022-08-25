@@ -1,6 +1,9 @@
-import utils
+from scheduler import utils
 
-def define_shift_state(model, all_days, all_hours, all_minutes, all_vehicles, all_duration):
+
+def define_shift_state(
+    model, all_days, all_hours, all_minutes, all_vehicles, all_duration
+):
     """Define the state of all shifts"""
     shifts_state = {}
     for day in all_days:
@@ -79,16 +82,16 @@ def define_rush_hour(model, all_hours, all_minutes, rush_hour_input):
 
 
 def define_completion_rate(
-    model, 
-    all_days, 
-    all_hours, 
+    model,
+    all_days,
+    all_hours,
     all_minutes,
     all_vehicles,
-    all_duration, 
+    all_duration,
     num_vehicles,
     demand_input,
-    shifts_state
-    ):
+    shifts_state,
+):
     """Auxiliary variable to define completion_rate
     The completion rate is the min between demand and vehicles
     """

@@ -1,14 +1,25 @@
 version: '3.7'
 services:
-  alto_scheduler:
-    build: 
+  alto_api:
+    build:
       context: ./
-    container_name: alto_scheduler
+      dockerfile: Dockerfile_api
+    container_name: alto_api
     restart: always
     ports:
-      - "8080:80"
+      - "80:80"
     networks:
-      - network
+      - alto_network
+  alto_app:
+    build:
+      context: ./
+      dockerfile: Dockerfile_app
+    container_name: alto_app
+    restart: always
+    ports:
+      - "8080:8080"
+    networks:
+      - alto_network
 networks:
-  network:
+  alto_network:
     driver: bridge

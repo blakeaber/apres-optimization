@@ -1,4 +1,4 @@
-import utils
+from scheduler import utils
 
 
 def shifts_contiguous(
