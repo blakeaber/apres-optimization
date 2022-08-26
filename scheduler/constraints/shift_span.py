@@ -124,7 +124,7 @@ def shift_span(
             model.Add(
                 sum_of_starts[(vehicle, minute)] != sum_of_ends[(vehicle, minute)]
             ).OnlyEnforceIf(sum_equals[(vehicle, minute)].Not())
-            model.Add(shifts_state[range_minute, vehicle] == 0).OnlyEnforceIf(
+            model.Add(shifts_state[minute, vehicle] == 0).OnlyEnforceIf(
                 [
                     sum_equals[(vehicle, minute)],
                     shifts_end[(vehicle, minute)].Not(),
