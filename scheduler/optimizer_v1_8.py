@@ -66,9 +66,8 @@ def compute_schedule(heartbeat: HeartbeatStatus):
 
     # The states is [day, start_hour, start_minute, end_hour, end_minute, vehicle_id, shift_hours]
     # Ranges (for the for-loops)
-    all_days = range(num_days)
-    all_hours = range(num_hours)
-    all_minutes = range(0, num_minutes, minutes_interval)
+    total_minutes = num_minutes * num_hours * num_days
+    all_minutes = range(0, total_minutes, minutes_interval)
     all_vehicles = range(num_vehicles)
     all_duration = range(min_duration, max_duration, duration_step)
 
@@ -129,96 +128,105 @@ def compute_schedule(heartbeat: HeartbeatStatus):
     print("Defining Auxiliary Variables")
 
     # Define Auxiliary Variables
-    shifts_state = define_shift_state(
-        model, all_days, all_hours, all_minutes, all_vehicles, all_duration
-    )
-    assigned_shifts = define_assigned_shifts(model, all_vehicles, all_duration)
-    shifts_start = define_shifts_start(
-        model, all_days, all_hours, all_minutes, all_vehicles
-    )
-    shifts_end = define_shifts_end(
-        model, all_days, all_hours, all_minutes, all_vehicles
-    )
+    shifts_state = define_shift_state(model, all_minutes, all_vehicles)
+    # assigned_shifts = define_assigned_shifts(model, all_vehicles, all_duration)
+    shifts_start = define_shifts_start(model, all_minutes, all_vehicles)
+    shifts_end = define_shifts_end(model, all_minutes, all_vehicles)
 
     # Defining KPI Variable
     completion_rate = define_completion_rate(
         model,
-        all_days,
-        all_hours,
         all_minutes,
         all_vehicles,
-        all_duration,
         num_vehicles,
         demand_input,
         shifts_state,
+        num_hours,
+        num_minutes,
     )
 
     heartbeat.set_stage(2)
     print("Defining Constraints")
 
     # Constraint 1: A vehicle can only be assigned to a shift per day
-    one_shift_per_day(
-        model,
-        shifts_state,
-        assigned_shifts,
-        all_days,
-        all_hours,
-        all_minutes,
-        all_vehicles,
-        all_duration,
-    )
+    # one_shift_per_day(
+    #     model,
+    #     shifts_state,
+    #     assigned_shifts,
+    #     all_days,
+    #     all_hours,
+    #     all_minutes,
+    #     all_vehicles,
+    #     all_duration,
+    # )
 
     # Constraint 2: The sum of assigned minutes should be at least as the shift duration or 0
-    shift_min_duration(
-        model,
-        shifts_state,
-        assigned_shifts,
-        all_days,
-        all_hours,
-        all_minutes,
-        all_vehicles,
-        all_duration,
-        minutes_interval,
-    )
+    # shift_min_duration(
+    #     model,
+    #     shifts_state,
+    #     assigned_shifts,
+    #     all_days,
+    #     all_hours,
+    #     all_minutes,
+    #     all_vehicles,
+    #     all_duration,
+    #     minutes_interval,
+    # )
 
     # Constraint 3: Shifts must expand in a continous window
     # in other words, do not allow smaller shifts
-    shifts_contiguous(
-        model,
-        shifts_state,
-        assigned_shifts,
-        all_days,
-        all_hours,
-        all_minutes,
-        all_vehicles,
-        all_duration,
-        minutes_interval,
-    )
+    # shifts_contiguous(
+    #     model,
+    #     shifts_state,
+    #     assigned_shifts,
+    #     all_days,
+    #     all_hours,
+    #     all_minutes,
+    #     all_vehicles,
+    #     all_duration,
+    #     minutes_interval,
+    # )
 
-    # # Constraint 4: Max amount of shifts that can start/end at the same time
+    # Constraint 4: Max amount of shifts that can start/end at the same time
     # Populate auxiliary variables
+    sum_of_starts = {
+        (vehicle, minute): model.NewIntVar(
+            0, len(all_minutes), f"sum_of_starts_v{vehicle}_m{minute}"
+        )
+        for vehicle in all_vehicles
+        for minute in all_minutes
+    }
+    sum_of_ends = {
+        (vehicle, minute): model.NewIntVar(
+            0, len(all_minutes), f"sum_of_ends_v{vehicle}_m{minute}"
+        )
+        for vehicle in all_vehicles
+        for minute in all_minutes
+    }
+    sum_equals = {
+        (vehicle, minute): model.NewBoolVar(f"sum_of_ends_v{vehicle}_m{minute}")
+        for vehicle in all_vehicles
+        for minute in all_minutes
+    }
     shift_span(
         model,
-        shifts_state,
         shifts_start,
         shifts_end,
-        all_days,
-        all_hours,
+        shifts_state,
         all_minutes,
         all_vehicles,
         all_duration,
-        minutes_interval,
-        num_days,
-        num_hours,
-        num_minutes,
+        total_minutes,
+        duration_step,
+        sum_of_starts,
+        sum_of_ends,
+        sum_equals,
     )
     # Add max starts & ends constraint
     max_start_and_end(
         model,
         shifts_start,
         shifts_end,
-        all_days,
-        all_hours,
         all_minutes,
         all_vehicles,
         max_starts_per_slot,
@@ -233,11 +241,11 @@ def compute_schedule(heartbeat: HeartbeatStatus):
             model,
             shifts_state,
             minimum_shifts_input,
-            all_days,
-            all_hours,
             all_vehicles,
             all_minutes,
             all_duration,
+            num_hours,
+            num_minutes,
         )
     # Define a new variable to keep track of the difference between the min_shifts and
     # the actual vehicles. We need this to use the max() function in the solver
@@ -246,21 +254,20 @@ def compute_schedule(heartbeat: HeartbeatStatus):
         shifts_state,
         minimum_shifts_input,
         num_vehicles,
-        all_days,
-        all_hours,
         all_minutes,
         all_vehicles,
-        all_duration,
+        num_hours,
+        num_minutes,
     )
 
     # Constraint 6: DO not end during rush hours
     # This is also a soft-constraint, but if the hard-constraint is enabled the soft
     # do not play any role
     if enable_rush_hour_constraint:
-        rush_hour = define_rush_hour(model, all_hours, all_minutes, rush_hour_input)
-        rush_hours(
-            model, shifts_end, rush_hour, all_vehicles, all_days, all_hours, all_minutes
+        rush_hour = define_rush_hour(
+            model, all_minutes, rush_hour_input, num_hours, num_minutes
         )
+        rush_hours(model, shifts_end, rush_hour, all_vehicles, all_minutes)
 
     # Constraint 7: No shifts during market closed hours
     # There are different ways to do this, i.e. `OnlyEnforceIf`, but I think this is the easiest and simplest one
@@ -269,20 +276,19 @@ def compute_schedule(heartbeat: HeartbeatStatus):
             model,
             shifts_state,
             market_hours_input,
-            all_days,
-            all_hours,
             all_vehicles,
             all_minutes,
-            all_duration,
+            num_hours,
+            num_minutes,
         )
 
     # Constraint 8: Fixed shifts
-    if fixed_shifts_input:
-        fixed_shifts(
-            model,
-            shifts_state,
-            fixed_shifts_input,
-        )
+    # if fixed_shifts_input:
+    #     fixed_shifts(
+    #         model,
+    #         shifts_state,
+    #         fixed_shifts_input,
+    #     )
 
     heartbeat.set_stage(3)
     print("Constructing Optimization Problem")
@@ -297,13 +303,12 @@ def compute_schedule(heartbeat: HeartbeatStatus):
             rush_hour_input,
             vehicles_to_min_shifts,
             all_vehicles,
-            all_duration,
             shifts_end,
-            all_days,
-            all_hours,
             all_minutes,
             rush_hour_soft_constraint_cost,
             minimum_shifts_soft_constraint_cost,
+            num_hours,
+            num_minutes,
         )
     )
 
@@ -335,12 +340,16 @@ def compute_schedule(heartbeat: HeartbeatStatus):
             vehicles_to_min_shifts,
             all_vehicles,
             all_duration,
+            shifts_start,
             shifts_end,
-            all_days,
-            all_hours,
             all_minutes,
             rush_hour_soft_constraint_cost,
             minimum_shifts_soft_constraint_cost,
+            num_hours,
+            num_minutes,
+            sum_of_starts,
+            sum_of_ends,
+            sum_equals,
         ),
     )
 

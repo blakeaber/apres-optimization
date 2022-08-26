@@ -52,3 +52,15 @@ def validate_fixed_shifts_input(
             )
 
     return invalid_shifts
+
+
+def expand_minutes_into_components(total_minutes, num_hours, num_minutes):
+    """Returns the days, hours, minutes contained inside the total minutes"""
+    minutes_per_hour = num_minutes
+    minutes_per_day = minutes_per_hour * num_hours
+
+    days = total_minutes // minutes_per_day
+    hours = int(total_minutes / minutes_per_hour % num_hours)
+    minutes = total_minutes % minutes_per_hour
+
+    return days, hours, minutes

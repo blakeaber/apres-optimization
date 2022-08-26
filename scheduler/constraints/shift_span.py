@@ -1,172 +1,132 @@
+from ortools.sat.python import cp_model
 
 
 def shift_span(
-    model,
-    shifts_state,
+    model: cp_model.CpModel,
     shifts_start,
     shifts_end,
-    all_days,
-    all_hours,
+    shifts_state,
     all_minutes,
     all_vehicles,
     all_duration,
-    minutes_interval,
-    num_days,
-    num_hours,
-    num_minutes,
+    total_minutes,
+    duration_step,
+    sum_of_starts,
+    sum_of_ends,
+    sum_equals,
 ):
-    # TODO Make this function cleaner
     for vehicle in all_vehicles:
-        for day in all_days:
+        # There must be the same number of starts & ends
+        model.Add(
+            cp_model.LinearExpr.Sum(
+                [shifts_start[(vehicle, minute)] for minute in all_minutes]
+            )
+            == cp_model.LinearExpr.Sum(
+                [shifts_end[(vehicle, minute)] for minute in all_minutes]
+            ),
+        )
+
+        # Auxiliary variable to keep track of the intervals
+        for minute in all_minutes:
+            end_durations_states = [
+                shifts_end[(vehicle, minute + duration)]
+                for duration in all_duration
+                if minute + duration < total_minutes
+            ]
+
+            # If shift_start then the shift_end must finish in a good duration
+            model.AddAtLeastOne(end_durations_states).OnlyEnforceIf(
+                shifts_start[(vehicle, minute)]
+            )
+
+            # Only one shift start in-between
             for duration in all_duration:
-                # Just one start per day
-                model.AddAtMostOne(
-                    shifts_start[(vehicle, day, hour, minute)]
-                    for hour in all_hours
-                    for minute in all_minutes
+                if minute + duration >= total_minutes:
+                    continue
+
+                internal_starts = []
+                internal_ends = []
+                for internal_duration in range(
+                    0 + duration_step, duration, duration_step
+                ):
+                    internal_starts.append(
+                        shifts_start[(vehicle, minute + internal_duration)]
+                    )
+                    internal_ends.append(
+                        shifts_end[(vehicle, minute + internal_duration)]
+                    )
+                model.Add(cp_model.LinearExpr.Sum(internal_starts) == 0).OnlyEnforceIf(
+                    [
+                        shifts_start[(vehicle, minute)],
+                        shifts_end[(vehicle, minute + duration)],
+                    ]
                 )
-                # Just one end per day
-                model.AddAtMostOne(
-                    shifts_end[(vehicle, day, hour, minute)]
-                    for hour in all_hours
-                    for minute in all_minutes
+                model.Add(cp_model.LinearExpr.Sum(internal_ends) == 0).OnlyEnforceIf(
+                    [
+                        shifts_start[(vehicle, minute)],
+                        shifts_end[(vehicle, minute + duration)],
+                    ]
                 )
-                for hour in all_hours:
-                    for minute in all_minutes:
-                        # Handle conditions to define start and end shifts
-                        # Start: Previous 0 Current 1
-                        # End: Current 1 Next 0
-                        if (day == 0) and (hour == 0) and (minute == 0):
-                            model.Add(
-                                shifts_start[(vehicle, day, hour, minute)] == 1
-                            ).OnlyEnforceIf(
-                                shifts_state[
-                                    (
-                                        day,
-                                        hour,
-                                        minute,
-                                        vehicle,
-                                        duration,
-                                    )
-                                ],
-                                shifts_state[
-                                    (
-                                        day,
-                                        hour,
-                                        minute + minutes_interval,
-                                        vehicle,
-                                        duration,
-                                    )
-                                ],
-                            )
-                        else:
-                            if minute == 0:
-                                model.Add(
-                                    shifts_start[(vehicle, day, hour, minute)] == 1
-                                ).OnlyEnforceIf(
-                                    shifts_state[
-                                        (
-                                            day,
-                                            hour,
-                                            minute,
-                                            vehicle,
-                                            duration,
-                                        )
-                                    ],
-                                    shifts_state[
-                                        (
-                                            day if hour > 0 else day - 1,
-                                            hour - 1 if hour > 0 else 23,
-                                            num_minutes - minutes_interval,
-                                            vehicle,
-                                            duration,
-                                        )
-                                    ].Not(),
-                                ),
-                            else:
-                                model.Add(
-                                    shifts_start[(vehicle, day, hour, minute)] == 1
-                                ).OnlyEnforceIf(
-                                    shifts_state[
-                                        (
-                                            day,
-                                            hour,
-                                            minute,
-                                            vehicle,
-                                            duration,
-                                        )
-                                    ],
-                                    shifts_state[
-                                        (
-                                            day,
-                                            hour,
-                                            minute - minutes_interval,
-                                            vehicle,
-                                            duration,
-                                        )
-                                    ].Not(),
+
+                # The states between start-end must be 1, 0 otherwhise. Include bouth boundaries
+                for range_minute in range(
+                    minute, minute + duration + duration_step, duration_step
+                ):
+                    model.Add(shifts_state[range_minute, vehicle] == 1).OnlyEnforceIf(
+                        [
+                            shifts_start[(vehicle, minute)],
+                            shifts_end[(vehicle, minute + duration)],
+                        ]
+                    )
+
+            # Compute the cumulative sum
+            if minute != all_minutes[0]:
+                model.Add(
+                    sum_of_starts[(vehicle, minute)]
+                    == (
+                        cp_model.LinearExpr.Sum(
+                            [
+                                shifts_start[(vehicle, in_minute)]
+                                for in_minute in range(
+                                    all_minutes[0], minute, all_minutes.step
                                 )
-                        if (
-                            (day == (num_days - 1))
-                            and (hour == (num_hours - 1))
-                            and (minute == (num_minutes - minutes_interval))
-                        ):  # Last slot of the schedule
-                            model.Add(
-                                shifts_end[(vehicle, day, hour, minute)]
-                                == shifts_state[
-                                    (
-                                        day,
-                                        hour,
-                                        minute,
-                                        vehicle,
-                                        duration,
-                                    )
-                                ]
-                            )
-                        else:
-                            if minute == (60 - minutes_interval):
-                                model.Add(
-                                    shifts_end[(vehicle, day, hour, minute)] == 1
-                                ).OnlyEnforceIf(
-                                    shifts_state[
-                                        (
-                                            day,
-                                            hour,
-                                            minute,
-                                            vehicle,
-                                            duration,
-                                        )
-                                    ],
-                                    shifts_state[
-                                        (
-                                            day if hour < 23 else day + 1,
-                                            hour + 1 if hour < 23 else 0,
-                                            0,
-                                            vehicle,
-                                            duration,
-                                        )
-                                    ].Not(),
+                            ]
+                        )
+                        + shifts_start[(vehicle, minute)]
+                    )
+                )
+                model.Add(
+                    sum_of_ends[(vehicle, minute)]
+                    == (
+                        cp_model.LinearExpr.Sum(
+                            [
+                                shifts_end[(vehicle, in_minute)]
+                                for in_minute in range(
+                                    all_minutes[0], minute, all_minutes.step
                                 )
-                            else:
-                                model.Add(
-                                    shifts_end[(vehicle, day, hour, minute)] == 1
-                                ).OnlyEnforceIf(
-                                    shifts_state[
-                                        (
-                                            day,
-                                            hour,
-                                            minute,
-                                            vehicle,
-                                            duration,
-                                        )
-                                    ],
-                                    shifts_state[
-                                        (
-                                            day,
-                                            hour,
-                                            minute + minutes_interval,
-                                            vehicle,
-                                            duration,
-                                        )
-                                    ].Not(),
-                                )
+                            ]
+                        )
+                        + shifts_end[(vehicle, minute)]
+                    )
+                )
+            else:
+                model.Add(
+                    sum_of_starts[(vehicle, minute)] == shifts_start[(vehicle, minute)]
+                )
+                model.Add(
+                    sum_of_ends[(vehicle, minute)] == shifts_end[(vehicle, minute)]
+                )
+
+            # For no shift when the sum is equal & not in an end
+            model.Add(
+                sum_of_starts[(vehicle, minute)] == sum_of_ends[(vehicle, minute)]
+            ).OnlyEnforceIf(sum_equals[(vehicle, minute)])
+            model.Add(
+                sum_of_starts[(vehicle, minute)] != sum_of_ends[(vehicle, minute)]
+            ).OnlyEnforceIf(sum_equals[(vehicle, minute)].Not())
+            model.Add(shifts_state[range_minute, vehicle] == 0).OnlyEnforceIf(
+                [
+                    sum_equals[(vehicle, minute)],
+                    shifts_end[(vehicle, minute)].Not(),
+                ]
+            )

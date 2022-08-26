@@ -113,6 +113,8 @@ def display_current_solution(current_heartbeat):
         df_schedule = pd.read_json(
             json.dumps(schedule_data), orient="split"
         ).sort_values(["start_time", "duration"], ascending=True)
+    else:
+        df_schedule = pd.DataFrame(columns=["start_time", "end_time", "vehicle"])
 
     schedule_fig = px.timeline(
         df_schedule, x_start="start_time", x_end="end_time", y="vehicle"
