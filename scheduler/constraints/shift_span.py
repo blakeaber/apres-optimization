@@ -26,41 +26,40 @@ def shift_span(
             ),
         )
 
-        # Auxiliary variable to keep track of the intervals
         for minute in all_minutes:
-            end_durations_states = [
-                shifts_end[(vehicle, minute + duration)]
-                for duration in all_duration
-                if minute + duration < total_minutes
-            ]
-
             # If shift_start then the shift_end must finish in a good duration
-            model.AddAtLeastOne(end_durations_states).OnlyEnforceIf(
-                shifts_start[(vehicle, minute)]
-            )
+            model.AddAtLeastOne(
+                [
+                    shifts_end[(vehicle, minute + duration)]
+                    for duration in all_duration
+                    if minute + duration < total_minutes
+                ]
+            ).OnlyEnforceIf(shifts_start[(vehicle, minute)])
 
             # Only one shift start in-between
             for duration in all_duration:
                 if minute + duration >= total_minutes:
                     continue
 
-                internal_starts = []
-                internal_ends = []
-                for internal_duration in range(
-                    0 + duration_step, duration, duration_step
-                ):
-                    internal_starts.append(
-                        shifts_start[(vehicle, minute + internal_duration)]
+                internal_starts = [
+                    shifts_start[(vehicle, minute + internal_duration)]
+                    for internal_duration in range(
+                        0 + duration_step, duration, duration_step
                     )
-                    internal_ends.append(
-                        shifts_end[(vehicle, minute + internal_duration)]
-                    )
+                ]
                 model.Add(cp_model.LinearExpr.Sum(internal_starts) == 0).OnlyEnforceIf(
                     [
                         shifts_start[(vehicle, minute)],
                         shifts_end[(vehicle, minute + duration)],
                     ]
                 )
+
+                internal_ends = [
+                    shifts_end[(vehicle, minute + internal_duration)]
+                    for internal_duration in range(
+                        0 + duration_step, duration, duration_step
+                    )
+                ]
                 model.Add(cp_model.LinearExpr.Sum(internal_ends) == 0).OnlyEnforceIf(
                     [
                         shifts_start[(vehicle, minute)],
@@ -84,28 +83,14 @@ def shift_span(
                 model.Add(
                     sum_of_starts[(vehicle, minute)]
                     == (
-                        cp_model.LinearExpr.Sum(
-                            [
-                                shifts_start[(vehicle, in_minute)]
-                                for in_minute in range(
-                                    all_minutes[0], minute, all_minutes.step
-                                )
-                            ]
-                        )
+                        sum_of_starts[(vehicle, minute - all_minutes.step)]
                         + shifts_start[(vehicle, minute)]
                     )
                 )
                 model.Add(
                     sum_of_ends[(vehicle, minute)]
                     == (
-                        cp_model.LinearExpr.Sum(
-                            [
-                                shifts_end[(vehicle, in_minute)]
-                                for in_minute in range(
-                                    all_minutes[0], minute, all_minutes.step
-                                )
-                            ]
-                        )
+                        sum_of_ends[(vehicle, minute - all_minutes.step)]
                         + shifts_end[(vehicle, minute)]
                     )
                 )
@@ -117,7 +102,7 @@ def shift_span(
                     sum_of_ends[(vehicle, minute)] == shifts_end[(vehicle, minute)]
                 )
 
-            # For no shift when the sum is equal & not in an end
+            # Shifts set to 0 when the sum is equal & not in an end
             model.Add(
                 sum_of_starts[(vehicle, minute)] == sum_of_ends[(vehicle, minute)]
             ).OnlyEnforceIf(sum_equals[(vehicle, minute)])

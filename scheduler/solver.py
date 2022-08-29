@@ -43,7 +43,6 @@ def get_solution_from_states_df(df: pd.DataFrame, heartbeat):
         .merge(min_shifts, on="time")
         .sort_values(["day", "hour", "minute"])
         .reset_index(drop=True)
-        .to_dict(orient="split")
     )
 
 
@@ -273,23 +272,23 @@ class SolutionCollector(cp_model.CpSolverSolutionCallback):
             )
 
             # DEBUG
-            for i in self.__all_minutes:
-                print(
-                    i,
-                    f"({self.Value(self.__shifts_state[(i, 0)])})",
-                    self.Value(self.__shifts_start[(0, i)]),
-                    self.Value(self.__shifts_end[(0, i)]),
-                    f"ss {self.Value(self.__sum_of_starts[(0, i)])}",
-                    f"se {self.Value(self.__sum_of_ends[(0, i)])}",
-                    f"eq {self.Value(self.__sum_equal[(0, i)])}",
-                    "----------",
-                    f"({self.Value(self.__shifts_state[(i, 1)])})",
-                    self.Value(self.__shifts_start[(1, i)]),
-                    self.Value(self.__shifts_end[(1, i)]),
-                    f"ss {self.Value(self.__sum_of_starts[(1, i)])}",
-                    f"se {self.Value(self.__sum_of_ends[(1, i)])}",
-                    f"eq {self.Value(self.__sum_equal[(1, i)])}",
-                )
+            # for i in self.__all_minutes:
+            #     print(
+            #         i,
+            #         f"({self.Value(self.__shifts_state[(i, 0)])})",
+            #         self.Value(self.__shifts_start[(0, i)]),
+            #         self.Value(self.__shifts_end[(0, i)]),
+            #         f"ss {self.Value(self.__sum_of_starts[(0, i)])}",
+            #         f"se {self.Value(self.__sum_of_ends[(0, i)])}",
+            #         f"eq {self.Value(self.__sum_equal[(0, i)])}",
+            #         "----------",
+            #         f"({self.Value(self.__shifts_state[(i, 1)])})",
+            #         self.Value(self.__shifts_start[(1, i)]),
+            #         self.Value(self.__shifts_end[(1, i)]),
+            #         f"ss {self.Value(self.__sum_of_starts[(1, i)])}",
+            #         f"se {self.Value(self.__sum_of_ends[(1, i)])}",
+            #         f"eq {self.Value(self.__sum_equal[(1, i)])}",
+            #     )
 
             shifts_state_values = []
             for k, v in self.__shifts_state.items():
@@ -311,6 +310,9 @@ class SolutionCollector(cp_model.CpSolverSolutionCallback):
                             self.Value(self.__shifts_end[k[1], k[0]]),
                         ]
                     )
+            # Ward against empty solutions (which are possible if not constrainted)
+            if not shifts_state_values:
+                return
             df = pd.DataFrame(
                 shifts_state_values,
                 columns=[
@@ -330,10 +332,15 @@ class SolutionCollector(cp_model.CpSolverSolutionCallback):
 
             self.__heartbeat.solution = get_solution_from_states_df(
                 df, self.__heartbeat
-            )
+            ).to_dict(orient="split")
             # self.__heartbeat.schedule = get_schedule_from_states_df(df)
 
             self.__heartbeat.score = current_score
             self.__heartbeat.step = self.__solution_count
+
+            # Store the solution in front format for ease of debugging
+            get_solution_from_states_df(df, self.__heartbeat).to_csv(
+                "./scheduler/solutions/best_solution_front_format.csv", index=False
+            )
 
         print()

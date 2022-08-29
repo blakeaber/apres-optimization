@@ -9,7 +9,7 @@ def define_shift_state(model, all_minutes, all_vehicles):
     for s_minute in all_minutes:
         for vehicle in all_vehicles:
             shifts_state[(s_minute, vehicle)] = model.NewBoolVar(
-                "shift_day_m_%i_vehicle_%i"
+                "shift_m_%i_vehicle_%i"
                 % (
                     s_minute,
                     vehicle,

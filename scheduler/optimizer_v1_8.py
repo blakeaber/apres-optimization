@@ -208,6 +208,12 @@ def compute_schedule(heartbeat: HeartbeatStatus):
         for vehicle in all_vehicles
         for minute in all_minutes
     }
+
+    # There must be at least one active state (i.e. one start)
+    # We do this to avoid the "empty shifts case" and prevent
+    # the solver to exploit that path, making it faster to find a feasible solution.
+    model.AddAtLeastOne(shifts_start.values())
+
     shift_span(
         model,
         shifts_start,
@@ -222,6 +228,7 @@ def compute_schedule(heartbeat: HeartbeatStatus):
         sum_of_ends,
         sum_equals,
     )
+
     # Add max starts & ends constraint
     max_start_and_end(
         model,
