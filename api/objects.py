@@ -2,6 +2,7 @@
 
 from typing import Union, List
 from pydantic import BaseModel
+from datetime import datetime
 
 
 class StaticVariables(BaseModel):
@@ -62,6 +63,8 @@ class HeartbeatStatus(BaseModel):
     stage: str = "No Stage Set"
     step: int = 0
     score: int = 0
+    start_time: str = None  # Y-M-D HH:MM:SS
+    end_time: str = None  # Y-M-D HH:MM:SS
     payload: OptimizerInput = None
     solution: VectorDataFrame = None
     schedule: VectorDataFrame = None
@@ -89,9 +92,15 @@ class HeartbeatStatus(BaseModel):
             self.stage = final_stage_message
 
     def reset(self):
-        """Resets the output fields `stage, step, score, solution & scheduler`"""
+        """Resets the output fields `stage, step, score, solution, start_time & scheduler` for a new run"""
         self.set_stage(0)
         self.step = 0
         self.score = 0
         self.solution = None
         self.schedule = None
+        self.start_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        self.end_time = None
+
+    def set_end_time(self):
+        """Records the end time"""
+        self.end_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")

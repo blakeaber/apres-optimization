@@ -5,19 +5,14 @@ from ortools.sat.python import cp_model
 from api.objects import HeartbeatStatus
 from .solver import define_maximization_function, SolutionCollector
 from .constraints import (
-    one_shift_per_day,
-    shift_min_duration,
-    shifts_contiguous,
     min_shifts_per_hour,
     shift_span,
     max_start_and_end,
     rush_hours,
     market_hours,
-    fixed_shifts,
 )
 from .auxiliary import (
     define_shift_state,
-    define_assigned_shifts,
     define_shifts_start,
     define_shifts_end,
     define_rush_hour,
@@ -367,3 +362,4 @@ def compute_schedule(heartbeat: HeartbeatStatus):
     else:
         print("No solution found.")
         heartbeat.set_stage(5, "Scheduler finished - No solution found.")
+    heartbeat.set_end_time()

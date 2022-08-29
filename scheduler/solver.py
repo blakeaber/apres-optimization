@@ -305,7 +305,6 @@ class SolutionCollector(cp_model.CpSolverSolutionCallback):
                             hour,
                             r_minutes,
                             k[1],
-                            current_score,
                             self.Value(self.__shifts_start[k[1], k[0]]),
                             self.Value(self.__shifts_end[k[1], k[0]]),
                         ]
@@ -320,7 +319,6 @@ class SolutionCollector(cp_model.CpSolverSolutionCallback):
                     "hour",
                     "minute",
                     "vehicle",
-                    "score",
                     "start",
                     "end",
                 ],

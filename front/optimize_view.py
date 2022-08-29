@@ -1,3 +1,4 @@
+from datetime import datetime
 import os
 import subprocess
 import json
@@ -32,7 +33,9 @@ layout = html.Div(
                     id="confirm-start",
                     message="This will stop any running scenarios. Are you sure?",
                 ),
-                html.Div(id="output-container-button"),
+                html.Div(
+                    id="output-container-button", style={"white-space": "pre-wrap"}
+                ),
             ]
         ),
         html.Div(id="output-container"),
@@ -87,9 +90,21 @@ def check_for_execution(_):
             "No scheduler execution detected.",
             data,
         )
+
+    time_delta = None
+    if data["start_time"]:
+        current = datetime.utcnow()
+        old = datetime.strptime(data["start_time"], "%Y-%m-%d %H:%M:%S")
+        delta = (current - old).seconds
+        time_delta = f"{delta // 60} minutes {delta % 60} seconds"
+
     return (
         BUTTON_STATE_RUNNING_EXECUTION,
-        f"The optimizer is running and looking for a solution! Current stage: {data['stage']}.",
+        f"""The optimizer is running and looking for a solution!
+        Current stage: {data['stage']}.
+        Start time: {data["start_time"] or "-"}
+        Time running: {time_delta or "-"}
+        End time: {data["end_time"] or "-"}""",
         data,
     )
 
@@ -127,7 +142,7 @@ def display_current_solution(current_heartbeat):
         df_solution,
         x="time",
         y=["vehicles", "demand"],
-        title=f"Best solution (run #{current_heartbeat['step']}) with {df_solution['starts'].sum()} vehicles",
+        title=f"Best solution (run #{current_heartbeat['step']}) with {df_solution['vehicles'].max()} vehicles",
     )
     fig.add_bar(
         x=df_solution["time"],
