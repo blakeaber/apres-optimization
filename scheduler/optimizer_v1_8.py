@@ -25,10 +25,7 @@ def compute_schedule(heartbeat: HeartbeatStatus):
     model = cp_model.CpModel()
 
     # Inputs
-    num_days = heartbeat.payload.static_variables.num_days
     num_hours = heartbeat.payload.static_variables.num_hours
-    num_minutes = heartbeat.payload.static_variables.num_minutes
-    minutes_interval = heartbeat.payload.static_variables.minutes_interval
     num_vehicles = heartbeat.payload.static_variables.num_vehicles
     min_duration = (
         heartbeat.payload.static_variables.min_duration * 60
@@ -36,7 +33,6 @@ def compute_schedule(heartbeat: HeartbeatStatus):
     max_duration = (
         heartbeat.payload.static_variables.max_duration * 60
     )  # Convert to minutes
-    duration_step = heartbeat.payload.static_variables.duration_step
     cost_vehicle_per_minute = heartbeat.payload.static_variables.cost_vehicle_per_15min
     revenue_passenger = heartbeat.payload.static_variables.revenue_passenger
     max_starts_per_slot = heartbeat.payload.static_variables.max_starts_per_slot
@@ -61,8 +57,9 @@ def compute_schedule(heartbeat: HeartbeatStatus):
 
     # The states is [day, start_hour, start_minute, end_hour, end_minute, vehicle_id, shift_hours]
     # Ranges (for the for-loops)
-    total_minutes = num_minutes * num_hours * num_days
-    all_minutes = range(0, total_minutes, minutes_interval)
+    duration_step = 15  # Minutes. We default to every 15 minutes
+    total_minutes = 60 * num_hours
+    all_minutes = range(0, total_minutes, duration_step)
     all_vehicles = range(num_vehicles)
     all_duration = range(min_duration, max_duration, duration_step)
 
@@ -136,8 +133,6 @@ def compute_schedule(heartbeat: HeartbeatStatus):
         num_vehicles,
         demand_input,
         shifts_state,
-        num_hours,
-        num_minutes,
     )
 
     heartbeat.set_stage(2)
@@ -246,8 +241,6 @@ def compute_schedule(heartbeat: HeartbeatStatus):
             all_vehicles,
             all_minutes,
             all_duration,
-            num_hours,
-            num_minutes,
         )
     # Define a new variable to keep track of the difference between the min_shifts and
     # the actual vehicles. We need this to use the max() function in the solver
@@ -258,17 +251,13 @@ def compute_schedule(heartbeat: HeartbeatStatus):
         num_vehicles,
         all_minutes,
         all_vehicles,
-        num_hours,
-        num_minutes,
     )
 
     # Constraint 6: DO not end during rush hours
     # This is also a soft-constraint, but if the hard-constraint is enabled the soft
     # do not play any role
     if enable_rush_hour_constraint:
-        rush_hour = define_rush_hour(
-            model, all_minutes, rush_hour_input, num_hours, num_minutes
-        )
+        rush_hour = define_rush_hour(model, all_minutes, rush_hour_input)
         rush_hours(model, shifts_end, rush_hour, all_vehicles, all_minutes)
 
     # Constraint 7: No shifts during market closed hours
@@ -280,8 +269,6 @@ def compute_schedule(heartbeat: HeartbeatStatus):
             market_hours_input,
             all_vehicles,
             all_minutes,
-            num_hours,
-            num_minutes,
         )
 
     # Constraint 8: Fixed shifts
@@ -309,8 +296,6 @@ def compute_schedule(heartbeat: HeartbeatStatus):
             all_minutes,
             rush_hour_soft_constraint_cost,
             minimum_shifts_soft_constraint_cost,
-            num_hours,
-            num_minutes,
         )
     )
 
@@ -347,8 +332,6 @@ def compute_schedule(heartbeat: HeartbeatStatus):
             all_minutes,
             rush_hour_soft_constraint_cost,
             minimum_shifts_soft_constraint_cost,
-            num_hours,
-            num_minutes,
             sum_of_starts,
             sum_of_ends,
             sum_equals,

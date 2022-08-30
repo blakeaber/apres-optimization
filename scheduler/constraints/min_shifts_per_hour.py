@@ -9,13 +9,9 @@ def min_shifts_per_hour(
     all_vehicles,
     all_minutes,
     all_duration,
-    num_hours,
-    num_minutes,
 ):
     # The sum of active vehicles per slot can't be smaller than the minimum specified shifts
     for minute in all_minutes:
         vehicles = get_vehicles_in_time(shifts_state, minute, all_vehicles)
-        day, hour, r_minutes = expand_minutes_into_components(
-            minute, num_hours, num_minutes
-        )
+        day, hour, r_minutes = expand_minutes_into_components(minute)
         model.Add(vehicles >= minimum_shifts[(day, hour, r_minutes)])

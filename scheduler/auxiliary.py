@@ -47,13 +47,11 @@ def define_shifts_end(model, all_minutes, all_vehicles):
     }
 
 
-def define_rush_hour(model, all_minutes, rush_hour_input, num_hours, num_minutes):
+def define_rush_hour(model, all_minutes, rush_hour_input):
     """Auxiliary variable to track if we are in a rush hour"""
     rush_hour = {}
     for minute in all_minutes:
-        day, hour, r_minute = expand_minutes_into_components(
-            minute, num_hours, num_minutes
-        )
+        day, hour, r_minute = expand_minutes_into_components(minute)
         var = model.NewBoolVar(f"rush_hour_{minute}")
         rush_hour[minute] = var
         if rush_hour_input[(hour, r_minute)]:
@@ -70,8 +68,6 @@ def define_completion_rate(
     num_vehicles,
     demand_input,
     shifts_state,
-    num_hours,
-    num_minutes,
 ):
     """Auxiliary variable to define completion_rate
     The completion rate is the min between demand and vehicles
@@ -81,9 +77,7 @@ def define_completion_rate(
         completion_rate[minute] = model.NewIntVar(
             0, num_vehicles, f"completion_rate_m{minute}"
         )
-        day, hour, r_minute = expand_minutes_into_components(
-            minute, num_hours, num_minutes
-        )
+        day, hour, r_minute = expand_minutes_into_components(minute)
         model.AddMinEquality(
             completion_rate[minute],
             [
@@ -155,16 +149,12 @@ def define_min_shifts_to_vehicles_difference(
     num_vehicles,
     all_minutes,
     all_vehicles,
-    num_hours,
-    num_minutes,
 ):
     """Defines a new Int variable that will hold the number of vehicles needed to meet
     the min_shifts requirement. Negative values are clamped to 0"""
     vehicles_to_min_shifts = {}
     for minute in all_minutes:
-        day, hour, r_minute = expand_minutes_into_components(
-            minute, num_hours, num_minutes
-        )
+        day, hour, r_minute = expand_minutes_into_components(minute)
         vehicles_to_min_shifts[minute] = model.NewIntVar(
             -max(num_vehicles, minimum_shifts_input[(day, hour, r_minute)]),
             max(num_vehicles, minimum_shifts_input[(day, hour, r_minute)]),

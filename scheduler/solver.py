@@ -93,15 +93,11 @@ def define_maximization_function(
     all_minutes,
     rush_hour_soft_constraint_cost,
     minimum_shifts_soft_constraint_cost,
-    num_hours,
-    num_minutes,
 ):
     """Returns an OrTools maximization function"""
 
     def _define_rush_hour_soft_constraint(minute):
-        day, hour, r_minutes = expand_minutes_into_components(
-            minute, num_hours, num_minutes
-        )
+        day, hour, r_minutes = expand_minutes_into_components(minute)
 
         return (
             cp_model.LinearExpr.Sum(
@@ -149,8 +145,6 @@ def compute_maximization_function_components(
     all_minutes,
     rush_hour_soft_constraint_cost,
     minimum_shifts_soft_constraint_cost,
-    num_hours,
-    num_minutes,
 ):
     """Computes and returns the final value of the maximization function.
 
@@ -173,9 +167,7 @@ def compute_maximization_function_components(
     )
 
     def _define_rush_hours_soft(minute):
-        day, hour, r_minutes = expand_minutes_into_components(
-            minute, num_hours, num_minutes
-        )
+        day, hour, r_minutes = expand_minutes_into_components(minute)
 
         return (
             sum(solver.Value(shifts_end[driver, minute]) for driver in all_vehicles)
@@ -215,8 +207,6 @@ class SolutionCollector(cp_model.CpSolverSolutionCallback):
         all_minutes,
         rush_hour_soft_constraint_cost,
         minimum_shifts_soft_constraint_cost,
-        num_hours,
-        num_minutes,
         sum_of_starts,
         sum_of_ends,
         sum_equals,
@@ -239,8 +229,6 @@ class SolutionCollector(cp_model.CpSolverSolutionCallback):
         self.__solution_count = 0
         self.__start_time = time.time()
         self._best_solution = -1e6
-        self.__num_hours = num_hours
-        self.__num_minutes = num_minutes
         self.__sum_of_starts = sum_of_starts
         self.__sum_of_ends = sum_of_ends
         self.__sum_equal = sum_equals
@@ -264,8 +252,6 @@ class SolutionCollector(cp_model.CpSolverSolutionCallback):
                 self.__all_minutes,
                 self.__rush_hour_soft_constraint_cost,
                 self.__minimum_shifts_soft_constraint_cost,
-                self.__num_hours,
-                self.__num_minutes,
             )
             print(
                 f"Solution found: {self.__solution_count} - {current_score}$ ({score_real}$ from real -{score_constraints}$ from soft constraints) - {current_time} seconds"
@@ -295,8 +281,6 @@ class SolutionCollector(cp_model.CpSolverSolutionCallback):
                 if self.Value(v) == 1:
                     day, hour, r_minutes = expand_minutes_into_components(
                         k[0],
-                        self.__num_hours,
-                        self.__num_minutes,
                     )
 
                     shifts_state_values.append(

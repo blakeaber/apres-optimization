@@ -8,11 +8,7 @@ from datetime import datetime
 class StaticVariables(BaseModel):
     """Scheduler constant parameters"""
 
-    num_days: int = 1
     num_hours: int = 24
-    num_minutes: int = 60
-    minutes_interval: int = 15
-    duration_step: int = 15
     num_vehicles: int = 20
     min_duration: int = 4
     max_duration: int = 10
