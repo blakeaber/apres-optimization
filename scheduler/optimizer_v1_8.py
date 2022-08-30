@@ -45,6 +45,7 @@ def compute_schedule(heartbeat: HeartbeatStatus):
     minimum_shifts_soft_constraint_cost = (
         heartbeat.payload.static_variables.minimum_shifts_soft_constraint_cost
     )
+    min_time_between_shifts = heartbeat.payload.static_variables.min_time_between_shifts
 
     # Constraint Flags
     enable_min_shift_constraint = (
@@ -224,6 +225,7 @@ def compute_schedule(heartbeat: HeartbeatStatus):
         all_duration,
         total_minutes,
         duration_step,
+        min_time_between_shifts,
         sum_of_starts,
         sum_of_ends,
         sum_equals,

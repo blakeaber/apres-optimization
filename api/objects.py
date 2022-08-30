@@ -21,6 +21,7 @@ class StaticVariables(BaseModel):
     enable_min_shift_constraint: bool = False
     rush_hour_soft_constraint_cost: int = 50
     minimum_shifts_soft_constraint_cost: int = 50
+    min_time_between_shifts: int = 30  # In minutes
 
 
 class VectorDataFrame(BaseModel):

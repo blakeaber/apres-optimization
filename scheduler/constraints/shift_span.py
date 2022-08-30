@@ -11,6 +11,7 @@ def shift_span(
     all_duration,
     total_minutes,
     duration_step,
+    min_time_between_shifts,
     sum_of_starts,
     sum_of_ends,
     sum_equals,
@@ -77,6 +78,14 @@ def shift_span(
                             shifts_end[(vehicle, minute + duration)],
                         ]
                     )
+
+            # Minimum time to wait between shifts
+            for internal_duration in range(0, min_time_between_shifts, duration_step):
+                if minute + internal_duration >= total_minutes:
+                    continue
+                model.Add(
+                    shifts_start[(vehicle, minute + internal_duration)] == 0
+                ).OnlyEnforceIf(shifts_end[(vehicle, minute)])
 
             # Compute the cumulative sum
             if minute != all_minutes[0]:
