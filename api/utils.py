@@ -35,6 +35,12 @@ def files_to_dynamic_variables(path: str):
         df = pd.read_csv(specific_path)
         dynamic_variables["rush_hours"] = df.to_dict(orient="split")
 
+    # Fixed shifts
+    specific_path = os.path.join(path, "constraint_fixed_shifts.csv")
+    if os.path.exists(specific_path):
+        df = pd.read_csv(specific_path)
+        dynamic_variables["fixed_shifts"] = df.to_dict(orient="split")
+
     # Store data
     with open(os.path.join(path, "dynamic_variables.json"), "w") as f:
         json.dump({"dynamic_variables": dynamic_variables}, f)
@@ -77,5 +83,7 @@ def solution_to_graph():
 
 
 if __name__ == "__main__":
-    # files_to_dynamic_variables("/Users/jorge/Downloads/mike test overnight")
+    # files_to_dynamic_variables(
+    #     "/Users/jorge/Documents/dev/alto_app/scheduler/user_input"
+    # )
     solution_to_graph()

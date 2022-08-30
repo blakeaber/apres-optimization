@@ -10,6 +10,7 @@ from .constraints import (
     max_start_and_end,
     rush_hours,
     market_hours,
+    fixed_shifts,
 )
 from .auxiliary import (
     define_shift_state,
@@ -19,6 +20,7 @@ from .auxiliary import (
     define_completion_rate,
     define_min_shifts_to_vehicles_difference,
 )
+from .utils import validate_fixed_shifts_input
 
 
 def compute_schedule(heartbeat: HeartbeatStatus):
@@ -105,14 +107,22 @@ def compute_schedule(heartbeat: HeartbeatStatus):
     else:
         minimum_shifts_input = None
 
-    # Fixed shifts: Convert to constraint format
+    # Fixed shifts: Convert to list
     if heartbeat.payload.dynamic_variables.fixed_shifts:
-        fixed_shifts_input = {
-            (c["day"], c["hour"], c["minute"]): int(c["min_shifts"])
-            for _, c in pd.read_json(
-                heartbeat.payload.dynamic_variables.fixed_shifts.json(), orient="split"
-            ).iterrows()
-        }
+        df_fixed_shifts = pd.read_json(
+            heartbeat.payload.dynamic_variables.fixed_shifts.json(), orient="split"
+        )
+        invalid_shifts = validate_fixed_shifts_input(
+            df_fixed_shifts,
+            duration_step,
+            min_duration,
+            max_duration,
+            num_vehicles,
+        )
+        if invalid_shifts:
+            raise ValueError("Fixed shifts input contains errors", invalid_shifts)
+        fixed_shifts_input = df_fixed_shifts.iloc[:, 1:].to_numpy()
+        del df_fixed_shifts
     else:
         fixed_shifts_input = None
 
@@ -272,12 +282,8 @@ def compute_schedule(heartbeat: HeartbeatStatus):
         )
 
     # Constraint 8: Fixed shifts
-    # if fixed_shifts_input:
-    #     fixed_shifts(
-    #         model,
-    #         shifts_state,
-    #         fixed_shifts_input,
-    #     )
+    if fixed_shifts_input is not None:
+        fixed_shifts(model, shifts_start, shifts_end, fixed_shifts_input)
 
     heartbeat.set_stage(3)
     print("Constructing Optimization Problem")
