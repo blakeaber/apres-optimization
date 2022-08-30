@@ -1,30 +1,23 @@
+from scheduler.utils import expand_minutes_into_components
 
 
 def market_hours(
     model,
     shifts_state,
-    market_hours,
-    all_days,
-    all_hours,
+    market_hours_input,
     all_vehicles,
     all_minutes,
-    all_duration,
 ):
-    for day in all_days:
-        for hour in all_hours:
-            for minute in all_minutes:
-                for vehicle in all_vehicles:
-                    for duration in all_duration:
-                        if market_hours[(day, hour, minute)] == 0:  # Closed
-                            model.Add(
-                                shifts_state[
-                                    (
-                                        day,
-                                        hour,
-                                        minute,
-                                        vehicle,
-                                        duration,
-                                    )
-                                ]
-                                == 0
-                            )
+    for minute in all_minutes:
+        for vehicle in all_vehicles:
+            day, hour, r_minute = expand_minutes_into_components(minute)
+            if market_hours_input[(day, hour, r_minute)] == 0:  # Closed
+                model.Add(
+                    shifts_state[
+                        (
+                            minute,
+                            vehicle,
+                        )
+                    ]
+                    == 0
+                )

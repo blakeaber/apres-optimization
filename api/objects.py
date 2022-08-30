@@ -2,16 +2,13 @@
 
 from typing import Union, List
 from pydantic import BaseModel
+from datetime import datetime
 
 
 class StaticVariables(BaseModel):
     """Scheduler constant parameters"""
 
-    num_days: int = 1
     num_hours: int = 24
-    num_minutes: int = 60
-    minutes_interval: int = 15
-    duration_step: int = 15
     num_vehicles: int = 20
     min_duration: int = 4
     max_duration: int = 10
@@ -24,6 +21,7 @@ class StaticVariables(BaseModel):
     enable_min_shift_constraint: bool = False
     rush_hour_soft_constraint_cost: int = 50
     minimum_shifts_soft_constraint_cost: int = 50
+    min_time_between_shifts: int = 30  # In minutes
 
 
 class VectorDataFrame(BaseModel):
@@ -57,11 +55,17 @@ class OptimizerInput(BaseModel):
 class HeartbeatStatus(BaseModel):
     """Main object to keep track of scheduler executions."""
 
-    version: float = 1.0
-    stage_id: int = 0
-    stage: str = "No Stage Set"
-    step: int = 0
-    score: int = 0
+    version: float = 1.0  # Heartbeat version
+    stage_id: int = 0  # Id of the current scheduler stage
+    stage: str = "No Stage Set"  # Name of the current scheduler stage. May have several for the same stage_id
+    step: int = 0  # Current number of solutions found
+    total_score: int = 0  # Total score from the current best solution. Corresponds to `score_real - score_constraints`
+    score_real: int = 0  # Score amount coming from operations (i.e. revenue - costs)
+    score_constraints: int = 0  # Score amount coming from soft constraints. It is represented as negative number as its a cost
+    start_time: str = None  # (Y-M-D HH:MM:SS) Start time of the current execution
+    end_time: str = (
+        None  # (Y-M-D HH:MM:SS) End time of the current execution, if finished
+    )
     payload: OptimizerInput = None
     solution: VectorDataFrame = None
     schedule: VectorDataFrame = None
@@ -89,9 +93,17 @@ class HeartbeatStatus(BaseModel):
             self.stage = final_stage_message
 
     def reset(self):
-        """Resets the output fields `stage, step, score, solution & scheduler`"""
+        """Resets the output fields `stage, step, score, solution, start_time & scheduler` for a new run"""
         self.set_stage(0)
         self.step = 0
-        self.score = 0
+        self.total_score = 0
+        self.score_real = 0
+        self.score_constraints = 0
         self.solution = None
         self.schedule = None
+        self.start_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        self.end_time = None
+
+    def set_end_time(self):
+        """Records the end time"""
+        self.end_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
