@@ -30,7 +30,7 @@ def optimizer_heartbeat():
         stage_id=heartbeat.stage_id,
         stage=heartbeat.stage,
         step=heartbeat.step,
-        score=heartbeat.score,
+        score=heartbeat.total_score,
     )
 
 

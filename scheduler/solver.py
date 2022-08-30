@@ -251,7 +251,7 @@ class SolutionCollector(cp_model.CpSolverSolutionCallback):
 
         if current_score > self._best_solution:
             current_time = round(time.time() - self.__start_time, 2)
-            real, constraints = compute_maximization_function_components(
+            score_real, score_constraints = compute_maximization_function_components(
                 self,
                 self.__shifts_state,
                 self.__completion_rate,
@@ -268,7 +268,7 @@ class SolutionCollector(cp_model.CpSolverSolutionCallback):
                 self.__num_minutes,
             )
             print(
-                f"Solution found: {self.__solution_count} - {current_score}$ ({real}$ from real -{constraints}$ from soft constraints) - {current_time} seconds"
+                f"Solution found: {self.__solution_count} - {current_score}$ ({score_real}$ from real -{score_constraints}$ from soft constraints) - {current_time} seconds"
             )
 
             # DEBUG
@@ -333,7 +333,9 @@ class SolutionCollector(cp_model.CpSolverSolutionCallback):
             ).to_dict(orient="split")
             # self.__heartbeat.schedule = get_schedule_from_states_df(df)
 
-            self.__heartbeat.score = current_score
+            self.__heartbeat.total_score = current_score
+            self.__heartbeat.score_real = score_real
+            self.__heartbeat.score_constraints = -score_constraints
             self.__heartbeat.step = self.__solution_count
 
             # Store the solution in front format for ease of debugging
