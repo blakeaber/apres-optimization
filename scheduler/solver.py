@@ -210,6 +210,7 @@ class SolutionCollector(cp_model.CpSolverSolutionCallback):
         sum_of_starts,
         sum_of_ends,
         sum_equals,
+        multiprocess_pipe,
     ):
         cp_model.CpSolverSolutionCallback.__init__(self)
         self.__heartbeat = heartbeat
@@ -228,7 +229,8 @@ class SolutionCollector(cp_model.CpSolverSolutionCallback):
         self.__minimum_shifts_soft_constraint_cost = minimum_shifts_soft_constraint_cost
         self.__solution_count = 0
         self.__start_time = time.time()
-        self._best_solution = -1e6
+        self.__best_solution = -1e6
+        self.__multiprocess_pipe = multiprocess_pipe
         self.__sum_of_starts = sum_of_starts
         self.__sum_of_ends = sum_of_ends
         self.__sum_equal = sum_equals
@@ -237,7 +239,7 @@ class SolutionCollector(cp_model.CpSolverSolutionCallback):
         self.__solution_count += 1
         current_score = int(self.ObjectiveValue())
 
-        if current_score > self._best_solution:
+        if current_score > self.__best_solution:
             current_time = round(time.time() - self.__start_time, 2)
             score_real, score_constraints = compute_maximization_function_components(
                 self,
@@ -321,6 +323,10 @@ class SolutionCollector(cp_model.CpSolverSolutionCallback):
             self.__heartbeat.score_real = score_real
             self.__heartbeat.score_constraints = -score_constraints
             self.__heartbeat.step = self.__solution_count
+
+            # If we have a multiprocess pipe, send the heartbeat through it
+            if self.__multiprocess_pipe:
+                self.__multiprocess_pipe.send(self.__heartbeat)
 
             # Store the solution in front format for ease of debugging
             get_solution_from_states_df(df, self.__heartbeat).to_csv(
