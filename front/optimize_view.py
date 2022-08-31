@@ -1,7 +1,7 @@
 from datetime import datetime
 import os
-import subprocess
 import json
+from uuid import uuid4
 
 import pandas as pd
 import plotly.express as px
@@ -28,7 +28,7 @@ layout = html.Div(
             [
                 html.H3("Settings"),
                 html.Div(id="parameters-table"),
-                dbc.Button(BUTTON_STATE_NO_EXECUTION, id="start-button", disabled=True),
+                dbc.Button(BUTTON_STATE_NO_EXECUTION, id="start-button"),
                 dcc.ConfirmDialog(
                     id="confirm-start",
                     message="This will stop any running scenarios. Are you sure?",
@@ -56,21 +56,64 @@ def run_script_onClick(n_clicks, button_state):
     if not n_clicks:
         return dash.no_update
 
-    # kill zombie optimization runs (if they exist)
-    delete_previous_runs = (
-        "ps aux | grep -ie '[p]ython optimizer_' | awk '{print $2}' | xargs kill -9 $1"
-    )
-    _ = subprocess.run(delete_previous_runs, shell=True)
-
     # run latest scenario
-    if button_state == BUTTON_STATE_NO_EXECUTION:
-        pass
+    if button_state == BUTTON_STATE_RUNNING_EXECUTION:
+        return dash.no_update
 
-    return True
+    # Build the Post payload
+    payload = {}
+
+    # Static variables
+    with open("./scheduler/user_input/parameters.json", "r") as f:
+        payload["static_variables"] = json.load(f)
+
+    # Dynamic variables
+    dynamic_variables = {}
+    path = "./scheduler/user_input/"
+
+    # Demand
+    specific_path = os.path.join(path, "constraint_demand.csv")
+    if os.path.exists(specific_path):
+        df = pd.read_csv(specific_path)
+        dynamic_variables["demand_forecast"] = df.to_dict(orient="split")
+    # Market Hours
+    specific_path = os.path.join(path, "constraint_market_hours.csv")
+    if os.path.exists(specific_path):
+        df = pd.read_csv(specific_path)
+        dynamic_variables["market_hours"] = df.to_dict(orient="split")
+    # Min Shifts
+    specific_path = os.path.join(path, "constraint_min_shifts.csv")
+    if os.path.exists(specific_path):
+        df = pd.read_csv(specific_path)
+        dynamic_variables["minimum_shifts"] = df.to_dict(orient="split")
+    # Rush Hours
+    specific_path = os.path.join(path, "constraint_rush_hours.csv")
+    if os.path.exists(specific_path):
+        df = pd.read_csv(specific_path)
+        dynamic_variables["rush_hours"] = df.to_dict(orient="split")
+    # Fixed shifts
+    specific_path = os.path.join(path, "constraint_fixed_shifts.csv")
+    if os.path.exists(specific_path):
+        df = pd.read_csv(specific_path)
+        dynamic_variables["fixed_shifts"] = df.to_dict(orient="split")
+
+    payload["dynamic_variables"] = dynamic_variables
+
+    # Add a run_id and trigger execution
+    payload["run_id"] = str(uuid4())
+
+    try:
+        requests.post("http://alto_api/input/", json=payload)
+    except Exception:
+        # Try to connect to localhost if running in debug mode
+        requests.post("http://0.0.0.0/input/", json=payload)
+
+    return False
 
 
 @callback(
     Output("start-button", "children"),
+    Output("start-button", "disabled"),
     Output("output-container-button", "children"),
     Output("current-heartbeat", "data"),
     Input("interval-component", "n_intervals"),
@@ -87,6 +130,7 @@ def check_for_execution(_):
     if data["stage_id"] == 0:
         return (
             BUTTON_STATE_NO_EXECUTION,
+            False,
             "No scheduler execution detected.",
             data,
         )
@@ -103,15 +147,27 @@ def check_for_execution(_):
             old = datetime.strptime(data["start_time"], "%Y-%m-%d %H:%M:%S")
             delta = (current - old).seconds
         time_delta = f"{delta // 60} minutes {delta % 60} seconds"
-    return (
-        BUTTON_STATE_RUNNING_EXECUTION,
-        f"""The optimizer is running and looking for a solution!
-        Current stage: {data['stage']}
-        Start time: {data["start_time"] or "-"}
-        Time running: {time_delta or "-"}
-        End time: {data["end_time"] or "-"}""",
-        data,
-    )
+
+    if data["stage_id"] in [5, -1]:
+        return (
+            BUTTON_STATE_NO_EXECUTION,
+            False,
+            f"""The optimizer was cancelled or found an optimal solution
+            Current stage: {data['stage']}
+            Start time: {data["start_time"] or "-"}
+            End time: {data["end_time"] or "-"}""",
+            data,
+        )
+    else:
+        return (
+            BUTTON_STATE_RUNNING_EXECUTION,
+            True,
+            f"""The optimizer is running and looking for a solution
+            Current stage: {data['stage']}
+            Start time: {data["start_time"] or "-"}
+            Time running: {time_delta or "-"}""",
+            data,
+        )
 
 
 @callback(
@@ -189,12 +245,11 @@ def display_current_solution(current_heartbeat):
         .transpose()
         .astype(str)
     )
-    parameters_table1 = dbc.Table.from_dataframe(
-        parameters_df.iloc[:, [0, 1, 2, 5, 6]], striped=True, size="sm"
-    )
-    parameters_table2 = dbc.Table.from_dataframe(
-        parameters_df.iloc[:, 7:], striped=True, size="sm"
-    )
+    parameters_tables = [
+        dbc.Table.from_dataframe(parameters_df.iloc[:, :5], striped=True, size="sm"),
+        dbc.Table.from_dataframe(parameters_df.iloc[:, 5:10], striped=True, size="sm"),
+        dbc.Table.from_dataframe(parameters_df.iloc[:, 10:], striped=True, size="sm"),
+    ]
 
     return html.Div(
         [
@@ -213,7 +268,7 @@ def display_current_solution(current_heartbeat):
                 ]
             ),
         ]
-    ), html.Div([parameters_table1, parameters_table2])
+    ), html.Div(parameters_tables)
 
 
 @callback(
