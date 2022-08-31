@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+
 from ortools.sat.python import cp_model
 
 from api.objects import HeartbeatStatus
@@ -23,7 +24,7 @@ from .auxiliary import (
 from .utils import validate_fixed_shifts_input
 
 
-def compute_schedule(heartbeat: HeartbeatStatus):
+def compute_schedule(heartbeat: HeartbeatStatus, multiprocess_pipe=None):
     model = cp_model.CpModel()
 
     # Inputs
@@ -128,6 +129,8 @@ def compute_schedule(heartbeat: HeartbeatStatus):
         fixed_shifts_input = None
 
     heartbeat.set_stage(1)
+    if multiprocess_pipe:
+        multiprocess_pipe.send(heartbeat)
     print("Defining Auxiliary Variables")
 
     # Define Auxiliary Variables
@@ -147,6 +150,8 @@ def compute_schedule(heartbeat: HeartbeatStatus):
     )
 
     heartbeat.set_stage(2)
+    if multiprocess_pipe:
+        multiprocess_pipe.send(heartbeat)
     print("Defining Constraints")
 
     # Constraint 1: A vehicle can only be assigned to a shift per day
@@ -288,6 +293,8 @@ def compute_schedule(heartbeat: HeartbeatStatus):
         fixed_shifts(model, shifts_start, shifts_end, fixed_shifts_input)
 
     heartbeat.set_stage(3)
+    if multiprocess_pipe:
+        multiprocess_pipe.send(heartbeat)
     print("Constructing Optimization Problem")
 
     # Maximize the revenue (completion_rate*revenue - occupancy*cost = completion_rate * revenue_per_passenger - activer_vehicle * cost_per_vehicle)
@@ -312,6 +319,8 @@ def compute_schedule(heartbeat: HeartbeatStatus):
         os.remove(f"./scheduler/solutions/{f}")
 
     heartbeat.set_stage(4)
+    if multiprocess_pipe:
+        multiprocess_pipe.send(heartbeat)
     print("Finding Solutions")
 
     solver = cp_model.CpSolver()
@@ -343,6 +352,7 @@ def compute_schedule(heartbeat: HeartbeatStatus):
             sum_of_starts,
             sum_of_ends,
             sum_equals,
+            multiprocess_pipe,
         ),
     )
 
@@ -354,3 +364,9 @@ def compute_schedule(heartbeat: HeartbeatStatus):
         print("No solution found.")
         heartbeat.set_stage(5, "Scheduler finished - No solution found.")
     heartbeat.set_end_time()
+    if multiprocess_pipe:
+        multiprocess_pipe.send(heartbeat)
+
+        # Finish process and close the process pipe
+        multiprocess_pipe.send(None)
+        multiprocess_pipe.close()
