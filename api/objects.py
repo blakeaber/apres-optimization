@@ -66,6 +66,9 @@ class HeartbeatStatus(BaseModel):
     end_time: str = (
         None  # (Y-M-D HH:MM:SS) End time of the current execution, if finished
     )
+    error_message: str = (
+        None  # Detailed information if an error happened during execution
+    )
     payload: OptimizerInput = None
     solution: VectorDataFrame = None
     schedule: VectorDataFrame = None
@@ -91,6 +94,9 @@ class HeartbeatStatus(BaseModel):
         elif id == 5:
             self.stage_id = 5
             self.stage = final_stage_message
+        elif id == -1:
+            self.stage_id = -1
+            self.stage = "Error during scheduler execution"
 
     def reset(self):
         """Resets the output fields `stage, step, score, solution, start_time & scheduler` for a new run"""
@@ -103,7 +109,12 @@ class HeartbeatStatus(BaseModel):
         self.schedule = None
         self.start_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
         self.end_time = None
+        self.error_message = None
 
     def set_end_time(self):
         """Records the end time"""
         self.end_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+
+    def set_error(self, exception_message: str):
+        self.set_stage(-1)
+        self.error_message = exception_message

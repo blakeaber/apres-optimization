@@ -47,7 +47,8 @@ def _scheduler_wrapper(heartbeat, multiprocess_pipe):
     try:
         compute_schedule(heartbeat, multiprocess_pipe)
     except Exception as e:
-        pass
+        heartbeat.set_error(str(e))
+        multiprocess_pipe.send(heartbeat)
     finally:
         multiprocess_pipe.close()
 
