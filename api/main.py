@@ -36,7 +36,8 @@ def _update_heartbeat_from_pipe(multiprocess_pipe):
             else:
                 break
     except Exception:
-        pass
+        heartbeat.set_error("The scheduler process was terminated.")
+        heartbeat.set_end_time()
     finally:
         multiprocess_pipe.close()
 
@@ -112,7 +113,7 @@ def optimizer_output():
     return heartbeat.dict()
 
 
-@optimizer.put("/cancel/{run_id}")
+@optimizer.get("/cancel/{run_id}")
 def cancel_scheduler(run_id: str):
     """If a scheduler run exists it terminates the process"""
 
@@ -130,7 +131,10 @@ def cancel_scheduler(run_id: str):
             detail="No running scheduler execution detected.",
         )
 
-    _current_scheduler_process.terminate()
+    print("Trying to terminate the process")
+    # Inside a while loop to flag it multiple times and prevent "confirmation" request
+    while _current_scheduler_process.is_alive():
+        _current_scheduler_process.kill()
     _current_scheduler_process = None
 
     return {"Scheduler execution terminated."}

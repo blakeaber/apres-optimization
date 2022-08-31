@@ -101,7 +101,7 @@ def check_for_execution(_):
     return (
         BUTTON_STATE_RUNNING_EXECUTION,
         f"""The optimizer is running and looking for a solution!
-        Current stage: {data['stage']}.
+        Current stage: {data['stage']}
         Start time: {data["start_time"] or "-"}
         Time running: {time_delta or "-"}
         End time: {data["end_time"] or "-"}""",

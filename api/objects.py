@@ -110,6 +110,8 @@ class HeartbeatStatus(BaseModel):
         self.start_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
         self.end_time = None
         self.error_message = None
+        self.solution = None
+        self.schedule = None
 
     def set_end_time(self):
         """Records the end time"""
