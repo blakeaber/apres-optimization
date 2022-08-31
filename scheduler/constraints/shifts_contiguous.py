@@ -1,4 +1,4 @@
-from scheduler import utils
+from scheduler.auxiliary import negated_bounded_span
 
 
 def shifts_contiguous(
@@ -35,5 +35,5 @@ def shifts_contiguous(
             for length in range(1, num_slots):
                 for start in range(len(shifts) - length + 1):
                     model.AddBoolOr(
-                        utils.negated_bounded_span(shifts, start, length)
+                        negated_bounded_span(shifts, start, length)
                     ).OnlyEnforceIf(assigned_shifts[(vehicle, duration)])

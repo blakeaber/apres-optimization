@@ -6,3 +6,4 @@ from .shift_span import shift_span
 from .max_start_and_end import max_start_and_end
 from .rush_hours import rush_hours
 from .market_hours import market_hours
+from .fixed_shifts import fixed_shifts

@@ -1,11 +1,8 @@
 import os
-import time
-import json
 import pandas as pd
 from api.objects import HeartbeatStatus
 from ortools.sat.python import cp_model
 
-from scheduler import utils
 from .constraints import (
     one_shift_per_day,
     shift_min_duration,
@@ -23,7 +20,9 @@ from .auxiliary import (
     define_shifts_end,
     define_rush_hour,
     define_completion_rate,
+    get_vehicles_in_time,
 )
+from .solver import SolutionCollector
 
 
 def compute_schedule(heartbeat: HeartbeatStatus):
@@ -240,7 +239,7 @@ def compute_schedule(heartbeat: HeartbeatStatus):
         cp_model.LinearExpr.Sum(
             [
                 completion_rate[(day, hour, minute)] * revenue_passenger
-                - utils.get_vehicles_in_time(
+                - get_vehicles_in_time(
                     shifts_state, day, hour, minute, all_vehicles, all_duration
                 )
                 * cost_vehicle_per_minute
@@ -267,7 +266,7 @@ def compute_schedule(heartbeat: HeartbeatStatus):
     )
 
     # solver callback to display and record interim solutions from the solver (on the journey to optimal solutions)
-    status = solver.Solve(model, utils.SolutionCollector(shifts_state, heartbeat))
+    status = solver.Solve(model, SolutionCollector(shifts_state, heartbeat))
 
     if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
         print(f"Maximum of objective function: {solver.ObjectiveValue()}\n")
