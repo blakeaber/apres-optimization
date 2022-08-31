@@ -212,7 +212,7 @@ def display_current_solution(current_heartbeat):
         df_solution,
         x="time",
         y=["vehicles", "demand"],
-        title=f"Best solution (run #{current_heartbeat['step']}) with {df_solution['vehicles'].max()} vehicles",
+        title=f"""Best solution (run #{current_heartbeat['step']}) with {df_solution['vehicles'].max()} vehicles. Total score: {current_heartbeat['total_score']:,}$ from which real score: {current_heartbeat['score_real']:,}$ and constraints cost: {current_heartbeat['score_constraints']:,}$""",
     )
     fig.add_bar(
         x=df_solution["time"],
