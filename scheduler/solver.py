@@ -8,11 +8,13 @@ from .utils import expand_minutes_into_components
 
 def get_solution_from_states_df(df: pd.DataFrame, heartbeat):
     df = df.sort_values(["day", "hour", "minute"]).reset_index(drop=True)
-    df["time"] = df.apply(
-        lambda row: f"{row['day'].astype(int)}-{row['hour'].astype(int)}-{row['minute'].astype(int)}",
-        axis=1,
+    df["time"] = (
+        df["day"].astype(str)
+        + "-"
+        + df["hour"].astype(str)
+        + "-"
+        + df["minute"].astype(str)
     )
-
     # Compute aggregations over time
     df = df.groupby("time")[["vehicle", "start", "end"]].agg(
         {"vehicle": "size", "start": "sum", "end": "sum"}
@@ -23,18 +25,24 @@ def get_solution_from_states_df(df: pd.DataFrame, heartbeat):
     demand = pd.read_json(
         heartbeat.payload.dynamic_variables.demand_forecast.json(), orient="split"
     )
-    demand["time"] = demand.apply(
-        lambda row: f"{row['day'].astype(int)}-{row['hour'].astype(int)}-{row['minute'].astype(int)}",
-        axis=1,
+    demand["time"] = (
+        demand["day"].astype(str)
+        + "-"
+        + demand["hour"].astype(str)
+        + "-"
+        + demand["minute"].astype(str)
     )
 
     if heartbeat.payload.dynamic_variables.minimum_shifts:
         min_shifts = pd.read_json(
             heartbeat.payload.dynamic_variables.minimum_shifts.json(), orient="split"
         )
-        min_shifts["time"] = min_shifts.apply(
-            lambda row: f"{row['day'].astype(int)}-{row['hour'].astype(int)}-{row['minute'].astype(int)}",
-            axis=1,
+        min_shifts["time"] = (
+            min_shifts["day"].astype(str)
+            + "-"
+            + min_shifts["hour"].astype(str)
+            + "-"
+            + min_shifts["minute"].astype(str)
         )
         min_shifts = min_shifts.drop(columns=["day", "hour", "minute"])
 
@@ -47,37 +55,32 @@ def get_solution_from_states_df(df: pd.DataFrame, heartbeat):
 
 
 def get_schedule_from_states_df(df):
-    def get_start_time(df):
-        """Based on the optimal schedule CSV, get the start times and duration (per vehicle)"""
-        df = df.sort_values(["day", "hour", "minute"], ascending=True)
-        return df.iloc[0][["day", "hour", "minute", "duration"]]
+    df = df.sort_values(["vehicle", "day", "hour", "minute"]).reset_index(drop=True)
+    # Need to add 1 to the days to make them a valid datetime.
+    # We want this to correctly plot a Gantt chart
+    df["day"] = df["day"] + 1
 
-    df = df.sort_values(["day", "hour", "minute"]).reset_index(drop=True)
-    df["time"] = df.apply(
-        lambda row: f"{row['day'].astype(int)}-{row['hour'].astype(int)}-{row['minute'].astype(int)}",
-        axis=1,
+    df["time"] = pd.to_datetime(
+        df["day"].astype(str)
+        + "-"
+        + df["hour"].astype(str)
+        + "-"
+        + df["minute"].astype(str),
+        format="%d-%H-%M",
     )
+
+    # We are only interested in rows with a start or an end
+    df = df[(df["start"] == 1) | (df["end"] == 1)]
 
     # Gantt chart: vehicle start times and duration (based on optimal schedules)
-    schedule_df = (
-        df.groupby("vehicle")
-        .apply(get_start_time)
-        .sort_values(["day", "hour", "minute"], ascending=True)
-        .reset_index(drop=True)
-    )
-    schedule_df.index.name = "vehicle"
-    schedule_df.reset_index(inplace=True)
+    # We have start-end in row pairs, so traverse the DF in pairs and set the start/end
+    gantt = []
+    for i in range(0, len(df), 2):
+        start_row = df.iloc[i]
+        end_row = df.iloc[i + 1]
+        gantt.append([start_row["vehicle"], start_row["time"], end_row["time"]])
+    schedule_df = pd.DataFrame(gantt, columns=["vehicle", "start_time", "end_time"])
 
-    # Gantt chart: starting and ending timestamps
-    schedule_df["start_time"] = pd.to_datetime(
-        schedule_df.apply(
-            lambda row: f"{row.hour.astype(int)}-{row.minute.astype(int)}", axis=1
-        ),
-        format="%H-%M",
-    )
-    schedule_df["end_time"] = schedule_df.apply(
-        lambda row: row.start_time + pd.Timedelta(minutes=row.duration), axis=1
-    )
     return schedule_df.to_dict(orient="split")
 
 
@@ -317,7 +320,7 @@ class SolutionCollector(cp_model.CpSolverSolutionCallback):
             self.__heartbeat.solution = get_solution_from_states_df(
                 df, self.__heartbeat
             ).to_dict(orient="split")
-            # self.__heartbeat.schedule = get_schedule_from_states_df(df)
+            self.__heartbeat.schedule = get_schedule_from_states_df(df)
 
             self.__heartbeat.total_score = current_score
             self.__heartbeat.score_real = score_real

@@ -93,11 +93,16 @@ def check_for_execution(_):
 
     time_delta = None
     if data["start_time"]:
-        current = datetime.utcnow()
-        old = datetime.strptime(data["start_time"], "%Y-%m-%d %H:%M:%S")
-        delta = (current - old).seconds
+        if data["end_time"]:
+            delta = (
+                datetime.strptime(data["end_time"], "%Y-%m-%d %H:%M:%S")
+                - datetime.strptime(data["start_time"], "%Y-%m-%d %H:%M:%S")
+            ).seconds
+        else:
+            current = datetime.utcnow()
+            old = datetime.strptime(data["start_time"], "%Y-%m-%d %H:%M:%S")
+            delta = (current - old).seconds
         time_delta = f"{delta // 60} minutes {delta % 60} seconds"
-
     return (
         BUTTON_STATE_RUNNING_EXECUTION,
         f"""The optimizer is running and looking for a solution!
@@ -115,19 +120,28 @@ def check_for_execution(_):
     Input("current-heartbeat", "data"),
 )
 def display_current_solution(current_heartbeat):
-    if current_heartbeat["stage_id"] < 4:
-        return dash.no_update
-
     solution_data, schedule_data = (
         current_heartbeat["solution"],
         current_heartbeat["schedule"],
     )
     if solution_data:
         df_solution = pd.read_json(json.dumps(solution_data), orient="split")
+    else:
+        df_solution = pd.DataFrame(
+            columns=[
+                "time",
+                "vehicles",
+                "starts",
+                "ends",
+                "day",
+                "hour",
+                "minute",
+                "demand",
+                "min_shifts",
+            ]
+        )
     if schedule_data:
-        df_schedule = pd.read_json(
-            json.dumps(schedule_data), orient="split"
-        ).sort_values(["start_time", "duration"], ascending=True)
+        df_schedule = pd.read_json(json.dumps(schedule_data), orient="split")
     else:
         df_schedule = pd.DataFrame(columns=["start_time", "end_time", "vehicle"])
 
