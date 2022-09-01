@@ -62,6 +62,7 @@ class HeartbeatStatus(BaseModel):
     total_score: int = 0  # Total score from the current best solution. Corresponds to `score_real - score_constraints`
     score_real: int = 0  # Score amount coming from operations (i.e. revenue - costs)
     score_constraints: int = 0  # Score amount coming from soft constraints. It is represented as negative number as its a cost
+    scores_over_time: list = []  # List of (real, constraint) scores over time.
     start_time: str = None  # (Y-M-D HH:MM:SS) Start time of the current execution
     end_time: str = (
         None  # (Y-M-D HH:MM:SS) End time of the current execution, if finished
@@ -112,6 +113,7 @@ class HeartbeatStatus(BaseModel):
         self.error_message = None
         self.solution = None
         self.schedule = None
+        self.scores_over_time = []
 
     def set_end_time(self):
         """Records the end time"""

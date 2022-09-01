@@ -301,6 +301,7 @@ class SolutionCollector(cp_model.CpSolverSolutionCallback):
             self.__heartbeat.total_score = current_score
             self.__heartbeat.score_real = score_real
             self.__heartbeat.score_constraints = -score_constraints
+            self.__heartbeat.scores_over_time.append((score_real, score_constraints))
             self.__heartbeat.step = self.__solution_count
 
             # If we have a multiprocess pipe, send the heartbeat through it

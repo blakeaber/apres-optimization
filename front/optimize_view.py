@@ -5,6 +5,7 @@ from uuid import uuid4
 
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import dash
 from dash import html, dcc, Output, callback, Input, State
 import dash_bootstrap_components as dbc
@@ -214,19 +215,19 @@ def display_current_solution(current_heartbeat):
     )  # otherwise tasks are listed from the bottom up
 
     # Vehicles over time chart
-    fig = px.line(
+    solution_fig = px.line(
         df_solution,
         x="time",
         y=["vehicles", "demand"],
         title=f"""Best solution (run #{current_heartbeat['step']}) with {df_schedule['vehicle'].nunique()} vehicles. Total score: {current_heartbeat['total_score']:,}$ from which real score: {current_heartbeat['score_real']:,}$ and constraints cost: {current_heartbeat['score_constraints']:,}$""",
     )
-    fig.add_bar(
+    solution_fig.add_bar(
         x=df_solution["time"],
         y=df_solution["starts"],
         name="starts",
         marker={"color": "green"},
     )
-    fig.add_bar(
+    solution_fig.add_bar(
         x=df_solution["time"],
         y=df_solution["ends"],
         name="ends",
@@ -235,7 +236,7 @@ def display_current_solution(current_heartbeat):
 
     # Include min shifts if present
     if "min_shifts" in df_solution:
-        fig.add_scatter(
+        solution_fig.add_scatter(
             x=df_solution["time"],
             y=df_solution["min_shifts"],
             name="min_shifts",
@@ -269,11 +270,54 @@ def display_current_solution(current_heartbeat):
     else:
         parameters_tables = []
 
+    # Scores over time table
+    if current_heartbeat["scores_over_time"]:
+        scores_over_time_df = pd.DataFrame(
+            current_heartbeat["scores_over_time"], columns=["real", "constraint"]
+        )
+        scores_over_time_df["total"] = (
+            scores_over_time_df["real"] - scores_over_time_df["constraint"]
+        )
+        scores_over_time_df["constraint"] *= -1
+        scores_over_time_fig = go.Figure()
+        scores_over_time_fig.add_trace(
+            go.Scatter(
+                x=scores_over_time_df.index,
+                y=scores_over_time_df["real"],
+                fill="tozeroy",
+                mode="lines",  # override default markers+lines
+                line={"color": "green"},
+                name="Real Score",
+            )
+        )
+        scores_over_time_fig.add_trace(
+            go.Scatter(
+                x=scores_over_time_df.index,
+                y=scores_over_time_df["constraint"],
+                fill="tozeroy",
+                mode="lines",
+                line={"color": "red"},
+                name="Constraints Cost",
+            )
+        )
+        scores_over_time_fig.add_trace(
+            go.Scatter(
+                x=scores_over_time_df.index,
+                y=scores_over_time_df["total"],
+                mode="lines",
+                line={"color": "yellow"},
+                name="Total Score",
+            )
+        )
+        scores_over_time_fig.update_layout(
+            title="Scores over time", xaxis_title="Run #", yaxis_title="Score"
+        )
+
     return html.Div(
         [
             html.Div(
                 [
-                    dcc.Graph(id="best-solution-graph", figure=fig),
+                    dcc.Graph(id="best-solution-graph", figure=solution_fig),
                     dbc.Button("Download Solution", id="solution-download-button"),
                     dcc.Download(id="best-solution-download"),
                 ]
@@ -283,6 +327,11 @@ def display_current_solution(current_heartbeat):
                     dcc.Graph(id="best-schedule-graph", figure=schedule_fig),
                     dbc.Button("Download Schedule", id="schedule-download-button"),
                     dcc.Download(id="best-schedule-download"),
+                ]
+            ),
+            html.Div(
+                [
+                    dcc.Graph(id="score-over-time-graph", figure=scores_over_time_fig),
                 ]
             ),
         ]
