@@ -12,7 +12,7 @@ layout = html.Div(
                         dbc.InputGroup(
                             [
                                 dbc.InputGroupText("Minutes Between Time Ticks"),
-                                dbc.Input(type="number", placeholder=15, disabled=True),
+                                dbc.Input(type="number", value=15, disabled=True),
                             ],
                             className="mb-3",
                         ),
@@ -22,7 +22,7 @@ layout = html.Div(
                                 dbc.Input(
                                     id="hours_to_simulate",
                                     type="number",
-                                    placeholder=24,
+                                    value=24,
                                     min=1,
                                     max=168,
                                     step=1,
@@ -36,7 +36,7 @@ layout = html.Div(
                                 dbc.Input(
                                     id="vehicle_count",
                                     type="number",
-                                    placeholder=20,
+                                    value=20,
                                     min=1,
                                     max=100,
                                     step=1,
@@ -50,7 +50,7 @@ layout = html.Div(
                                 dbc.Input(
                                     id="min_shift",
                                     type="number",
-                                    placeholder=4,
+                                    value=4,
                                     min=1,
                                     max=23,
                                     step=1,
@@ -64,7 +64,7 @@ layout = html.Div(
                                 dbc.Input(
                                     id="max_shift",
                                     type="number",
-                                    placeholder=10,
+                                    value=10,
                                     min=1,
                                     max=23,
                                     step=1,
@@ -80,7 +80,7 @@ layout = html.Div(
                                 dbc.Input(
                                     id="min_time_between_shifts",
                                     type="number",
-                                    placeholder=30,
+                                    value=30,
                                     min=0,
                                     step=15,
                                 ),
@@ -99,7 +99,7 @@ layout = html.Div(
                                 dbc.Input(
                                     id="vehicle_cost",
                                     type="number",
-                                    placeholder=2,
+                                    value=2,
                                     min=1,
                                     max=25,
                                 ),
@@ -113,7 +113,7 @@ layout = html.Div(
                                 dbc.Input(
                                     id="trip_revenue",
                                     type="number",
-                                    placeholder=50,
+                                    value=50,
                                     min=1,
                                     max=100,
                                     step=1,
@@ -134,7 +134,7 @@ layout = html.Div(
                                 dbc.Input(
                                     id="depot_starts",
                                     type="number",
-                                    placeholder=5,
+                                    value=5,
                                     min=1,
                                     max=15,
                                     step=1,
@@ -150,7 +150,7 @@ layout = html.Div(
                                 dbc.Input(
                                     id="depot_ends",
                                     type="number",
-                                    placeholder=5,
+                                    value=5,
                                     min=1,
                                     max=15,
                                     step=1,
@@ -189,7 +189,7 @@ layout = html.Div(
                                 dbc.Input(
                                     id="rush_hour_soft_constraint_cost",
                                     type="number",
-                                    placeholder=0,
+                                    value=0,
                                     min=0,
                                 ),
                             ],
@@ -204,7 +204,7 @@ layout = html.Div(
                                 dbc.Input(
                                     id="minimum_shifts_soft_constraint_cost",
                                     type="number",
-                                    placeholder=0,
+                                    value=0,
                                     min=0,
                                 ),
                             ],

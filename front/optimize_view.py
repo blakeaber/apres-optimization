@@ -19,7 +19,7 @@ if not directory_exists:
 
 # Button states
 BUTTON_STATE_NO_EXECUTION = "Start"
-BUTTON_STATE_RUNNING_EXECUTION = "Running"
+BUTTON_STATE_RUNNING_EXECUTION = "Cancel"
 
 
 layout = html.Div(
@@ -51,14 +51,17 @@ layout = html.Div(
     Output("confirm-start", "displayed"),
     Input("start-button", "n_clicks"),
     State("start-button", "children"),
+    State("current-heartbeat", "data"),
 )
-def run_script_onClick(n_clicks, button_state):
+def run_script_onClick(n_clicks, button_state, heartbeat):
     if not n_clicks:
         return dash.no_update
 
-    # run latest scenario
+    # Cancel if active
     if button_state == BUTTON_STATE_RUNNING_EXECUTION:
-        return dash.no_update
+        run_id = heartbeat["payload"]["run_id"]
+        requests.get(f"http://alto_api:8081/cancel/{run_id}")
+        return False
 
     # Build the Post payload
     payload = {}
@@ -103,10 +106,10 @@ def run_script_onClick(n_clicks, button_state):
     payload["run_id"] = str(uuid4())
 
     try:
-        requests.post("http://alto_api/input/", json=payload)
+        requests.post("http://alto_api:8081/input/", json=payload)
     except Exception:
         # Try to connect to localhost if running in debug mode
-        requests.post("http://0.0.0.0/input/", json=payload)
+        requests.post("http://0.0.0.0:8081/input/", json=payload)
 
     return False
 
@@ -121,10 +124,10 @@ def run_script_onClick(n_clicks, button_state):
 def check_for_execution(_):
     # Directly download the output
     try:
-        response = requests.get("http://alto_api/output/")
+        response = requests.get("http://alto_api:8081/output/")
     except Exception:
         # Try to connect to localhost if running in debug mode
-        response = requests.get("http://0.0.0.0/output/")
+        response = requests.get("http://0.0.0.0:8081/output/")
 
     data = response.json()
     if data["stage_id"] == 0:
@@ -161,7 +164,7 @@ def check_for_execution(_):
     else:
         return (
             BUTTON_STATE_RUNNING_EXECUTION,
-            True,
+            False,
             f"""The optimizer is running and looking for a solution
             Current stage: {data['stage']}
             Start time: {data["start_time"] or "-"}
@@ -212,7 +215,7 @@ def display_current_solution(current_heartbeat):
         df_solution,
         x="time",
         y=["vehicles", "demand"],
-        title=f"""Best solution (run #{current_heartbeat['step']}) with {df_solution['vehicles'].max()} vehicles. Total score: {current_heartbeat['total_score']:,}$ from which real score: {current_heartbeat['score_real']:,}$ and constraints cost: {current_heartbeat['score_constraints']:,}$""",
+        title=f"""Best solution (run #{current_heartbeat['step']}) with {df_schedule['vehicle'].nunique()} vehicles. Total score: {current_heartbeat['total_score']:,}$ from which real score: {current_heartbeat['score_real']:,}$ and constraints cost: {current_heartbeat['score_constraints']:,}$""",
     )
     fig.add_bar(
         x=df_solution["time"],
