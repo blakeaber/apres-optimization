@@ -7,7 +7,7 @@ from api.objects import HeartbeatStatus
 from .solver import define_maximization_function, SolutionCollector
 from .constraints import (
     min_shifts_per_hour,
-    shift_span,
+    shift_start_and_end_behaviour,
     max_start_and_end,
     rush_hours,
     market_hours,
@@ -20,14 +20,25 @@ from .auxiliary import (
     define_rush_hour,
     define_completion_rate,
     define_min_shifts_to_vehicles_difference,
+    define_sum_of_ends,
+    define_sum_of_equals,
+    define_sum_of_starts,
 )
 from .utils import validate_fixed_shifts_input
 
 
 def compute_schedule(heartbeat: HeartbeatStatus, multiprocess_pipe=None):
+    """This function defines the model contraints, objective function and runs the
+    optimizer until it finds an optimal or no-solution.
+
+    Args:
+        heartbeat (HeartbeatStatus): Status object which will be updated with the run information.
+        multiprocess_pipe (_type_, optional): Multiprocessing pipe to send the current heartbeat object
+            everytime it is updated. Defaults to None.
+    """
     model = cp_model.CpModel()
 
-    # Inputs
+    # Static Inputs
     num_hours = heartbeat.payload.static_variables.num_hours
     num_vehicles = heartbeat.payload.static_variables.num_vehicles
     min_duration = (
@@ -48,7 +59,7 @@ def compute_schedule(heartbeat: HeartbeatStatus, multiprocess_pipe=None):
     )
     min_time_between_shifts = heartbeat.payload.static_variables.min_time_between_shifts
 
-    # Constraint Flags
+    # Hard Constraints Flags
     enable_min_shift_constraint = (
         heartbeat.payload.static_variables.enable_min_shift_constraint
     )
@@ -59,10 +70,11 @@ def compute_schedule(heartbeat: HeartbeatStatus, multiprocess_pipe=None):
         heartbeat.payload.static_variables.enable_market_hour_constraint
     )
 
-    # The states is [day, start_hour, start_minute, end_hour, end_minute, vehicle_id, shift_hours]
-    # Ranges (for the for-loops)
-    duration_step = 15  # Minutes. We default to every 15 minutes
-    total_minutes = 60 * num_hours
+    # Utility Ranges (for the for-loops)
+    duration_step = 15  # In minutes. We default to every 15 minutes ticks.
+    total_minutes = (
+        60 * num_hours
+    )  # We work in minutes, so we convert the hours into minutes.
     all_minutes = range(0, total_minutes, duration_step)
     all_vehicles = range(num_vehicles)
     all_duration = range(min_duration, max_duration, duration_step)
@@ -109,7 +121,7 @@ def compute_schedule(heartbeat: HeartbeatStatus, multiprocess_pipe=None):
     else:
         minimum_shifts_input = None
 
-    # Fixed shifts: Convert to list
+    # Fixed shifts: Convert to cosntraint format (list)
     if heartbeat.payload.dynamic_variables.fixed_shifts:
         df_fixed_shifts = pd.read_json(
             heartbeat.payload.dynamic_variables.fixed_shifts.json(), orient="split"
@@ -128,18 +140,20 @@ def compute_schedule(heartbeat: HeartbeatStatus, multiprocess_pipe=None):
     else:
         fixed_shifts_input = None
 
+    # Define the main and auxiliary variables for the model
     heartbeat.set_stage(1)
     if multiprocess_pipe:
         multiprocess_pipe.send(heartbeat)
     print("Defining Auxiliary Variables")
 
-    # Define Auxiliary Variables
     shifts_state = define_shift_state(model, all_minutes, all_vehicles)
-    # assigned_shifts = define_assigned_shifts(model, all_vehicles, all_duration)
     shifts_start = define_shifts_start(model, all_minutes, all_vehicles)
     shifts_end = define_shifts_end(model, all_minutes, all_vehicles)
+    sum_of_starts = define_sum_of_starts(model, all_minutes, all_vehicles)
+    sum_of_ends = define_sum_of_ends(model, all_minutes, all_vehicles)
+    sum_equals = define_sum_of_equals(model, all_minutes, all_vehicles)
 
-    # Defining KPI Variable
+    # Auxiliary variable - It will be used to define the objective function
     completion_rate = define_completion_rate(
         model,
         all_minutes,
@@ -149,78 +163,22 @@ def compute_schedule(heartbeat: HeartbeatStatus, multiprocess_pipe=None):
         shifts_state,
     )
 
+    # Define the constraints
     heartbeat.set_stage(2)
     if multiprocess_pipe:
         multiprocess_pipe.send(heartbeat)
     print("Defining Constraints")
 
-    # Constraint 1: A vehicle can only be assigned to a shift per day
-    # one_shift_per_day(
-    #     model,
-    #     shifts_state,
-    #     assigned_shifts,
-    #     all_days,
-    #     all_hours,
-    #     all_minutes,
-    #     all_vehicles,
-    #     all_duration,
-    # )
-
-    # Constraint 2: The sum of assigned minutes should be at least as the shift duration or 0
-    # shift_min_duration(
-    #     model,
-    #     shifts_state,
-    #     assigned_shifts,
-    #     all_days,
-    #     all_hours,
-    #     all_minutes,
-    #     all_vehicles,
-    #     all_duration,
-    #     minutes_interval,
-    # )
-
-    # Constraint 3: Shifts must expand in a continous window
-    # in other words, do not allow smaller shifts
-    # shifts_contiguous(
-    #     model,
-    #     shifts_state,
-    #     assigned_shifts,
-    #     all_days,
-    #     all_hours,
-    #     all_minutes,
-    #     all_vehicles,
-    #     all_duration,
-    #     minutes_interval,
-    # )
-
-    # Constraint 4: Max amount of shifts that can start/end at the same time
-    # Populate auxiliary variables
-    sum_of_starts = {
-        (vehicle, minute): model.NewIntVar(
-            0, len(all_minutes), f"sum_of_starts_v{vehicle}_m{minute}"
-        )
-        for vehicle in all_vehicles
-        for minute in all_minutes
-    }
-    sum_of_ends = {
-        (vehicle, minute): model.NewIntVar(
-            0, len(all_minutes), f"sum_of_ends_v{vehicle}_m{minute}"
-        )
-        for vehicle in all_vehicles
-        for minute in all_minutes
-    }
-    sum_equals = {
-        (vehicle, minute): model.NewBoolVar(f"sum_of_ends_v{vehicle}_m{minute}")
-        for vehicle in all_vehicles
-        for minute in all_minutes
-    }
-
+    # Constraint #1
     # There must be at least one active state (i.e. one start)
     # We do this to avoid the "empty shifts case" and prevent
-    # the solver to exploit that path, making it faster to find a feasible solution.
+    # the solver from exploiting that path, making it faster to find a feasible solution.
     model.AddAtLeastOne(shifts_start.values())
 
-    shift_span(
+    # Constraint #2
+    # This is the main constraints
+    # Defines how the start and end of a shift must be constructed
+    shift_start_and_end_behaviour(
         model,
         shifts_start,
         shifts_end,
@@ -236,7 +194,7 @@ def compute_schedule(heartbeat: HeartbeatStatus, multiprocess_pipe=None):
         sum_equals,
     )
 
-    # Add max starts & ends constraint
+    # Constraint #3: Max starts & ends per time slot
     max_start_and_end(
         model,
         shifts_start,
@@ -247,9 +205,9 @@ def compute_schedule(heartbeat: HeartbeatStatus, multiprocess_pipe=None):
         max_ends_per_slot,
     )
 
-    # Constraint 5: Minimum shifts per hour
+    # Constraint #4: Minimum shifts per hour
     # This is also a soft-constraint, but if the hard-constraint is enabled the soft
-    # do not play any role
+    # does not play any role
     if enable_min_shift_constraint and minimum_shifts_input:
         min_shifts_per_hour(
             model,
@@ -270,15 +228,14 @@ def compute_schedule(heartbeat: HeartbeatStatus, multiprocess_pipe=None):
         all_vehicles,
     )
 
-    # Constraint 6: DO not end during rush hours
+    # Constraint #5: Do not end during rush hours
     # This is also a soft-constraint, but if the hard-constraint is enabled the soft
-    # do not play any role
+    # does not play any role
     if enable_rush_hour_constraint:
         rush_hour = define_rush_hour(model, all_minutes, rush_hour_input)
         rush_hours(model, shifts_end, rush_hour, all_vehicles, all_minutes)
 
-    # Constraint 7: No shifts during market closed hours
-    # There are different ways to do this, i.e. `OnlyEnforceIf`, but I think this is the easiest and simplest one
+    # Constraint #6: No shifts during market closed hours
     if enable_market_hour_constraint and market_hours_input:
         market_hours(
             model,
@@ -288,16 +245,16 @@ def compute_schedule(heartbeat: HeartbeatStatus, multiprocess_pipe=None):
             all_minutes,
         )
 
-    # Constraint 8: Fixed shifts
+    # Constraint #7: Fixed shifts
     if fixed_shifts_input is not None:
         fixed_shifts(model, shifts_start, shifts_end, fixed_shifts_input)
 
+    # Define the optimization function
     heartbeat.set_stage(3)
     if multiprocess_pipe:
         multiprocess_pipe.send(heartbeat)
     print("Constructing Optimization Problem")
 
-    # Maximize the revenue (completion_rate*revenue - occupancy*cost = completion_rate * revenue_per_passenger - activer_vehicle * cost_per_vehicle)
     model.Maximize(
         define_maximization_function(
             shifts_state,
@@ -318,6 +275,7 @@ def compute_schedule(heartbeat: HeartbeatStatus, multiprocess_pipe=None):
     for f in os.listdir("./scheduler/solutions"):
         os.remove(f"./scheduler/solutions/{f}")
 
+    # Run the scheduler
     heartbeat.set_stage(4)
     if multiprocess_pipe:
         multiprocess_pipe.send(heartbeat)
@@ -343,15 +301,11 @@ def compute_schedule(heartbeat: HeartbeatStatus, multiprocess_pipe=None):
             rush_hour_input,
             vehicles_to_min_shifts,
             all_vehicles,
-            all_duration,
             shifts_start,
             shifts_end,
             all_minutes,
             rush_hour_soft_constraint_cost,
             minimum_shifts_soft_constraint_cost,
-            sum_of_starts,
-            sum_of_ends,
-            sum_equals,
             multiprocess_pipe,
         ),
     )

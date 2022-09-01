@@ -8,7 +8,7 @@ from .constraints import (
     shift_min_duration,
     shifts_contiguous,
     min_shifts_per_hour,
-    shift_span,
+    shift_start_and_end_behaviour,
     max_start_and_end,
     rush_hours,
     market_hours,
@@ -183,7 +183,7 @@ def compute_schedule(heartbeat: HeartbeatStatus):
 
     # # Constraint 5: Max amount of shifts that can start/end at the same time
     # Populate auxiliary variables
-    shift_span(
+    shift_start_and_end_behaviour(
         model,
         shifts_state,
         shifts_start,

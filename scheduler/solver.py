@@ -97,11 +97,13 @@ def define_maximization_function(
     rush_hour_soft_constraint_cost,
     minimum_shifts_soft_constraint_cost,
 ):
-    """Returns an OrTools maximization function"""
+    """Returns an OrTools maximization function.
+    We are trying to maximize net revenue (passenger_revenue - vehicle_cost).
+    Additionally, we include soft constraints as an additional cost."""
 
     def _define_rush_hour_soft_constraint(minute):
+        """If in rush hour -> #_of_ends * rush_hour_cost else 0"""
         day, hour, r_minutes = expand_minutes_into_components(minute)
-
         return (
             cp_model.LinearExpr.Sum(
                 [
@@ -119,6 +121,7 @@ def define_maximization_function(
         )
 
     def _define_minimum_shifts_soft_constraint(minute):
+        """#_of_vehicles_missing_to_min_shifts * min_shifts_constraint_cost"""
         return vehicles_to_min_shifts[(minute)] * minimum_shifts_soft_constraint_cost
 
     return cp_model.LinearExpr.Sum(
@@ -152,7 +155,7 @@ def compute_maximization_function_components(
     """Computes and returns the final value of the maximization function.
 
     A tuple is returned, the first one represents the real revenue from operations,
-    the second represents the cost added by unmet soft constraints.
+    the second represents the cost added by unmeet soft constraints.
 
     It uses the provided CpSolverSolutionCallback to get the assigned real values.
     """
@@ -171,7 +174,6 @@ def compute_maximization_function_components(
 
     def _define_rush_hours_soft(minute):
         day, hour, r_minutes = expand_minutes_into_components(minute)
-
         return (
             sum(solver.Value(shifts_end[driver, minute]) for driver in all_vehicles)
             * rush_hour_input[hour, r_minutes]
@@ -204,15 +206,11 @@ class SolutionCollector(cp_model.CpSolverSolutionCallback):
         rush_hour_input,
         vehicles_to_min_shifts,
         all_vehicles,
-        all_duration,
         shifts_start,
         shifts_end,
         all_minutes,
         rush_hour_soft_constraint_cost,
         minimum_shifts_soft_constraint_cost,
-        sum_of_starts,
-        sum_of_ends,
-        sum_equals,
         multiprocess_pipe,
     ):
         cp_model.CpSolverSolutionCallback.__init__(self)
@@ -224,7 +222,6 @@ class SolutionCollector(cp_model.CpSolverSolutionCallback):
         self.__rush_hour_input = rush_hour_input
         self.__vehicles_to_min_shifts = vehicles_to_min_shifts
         self.__all_vehicles = all_vehicles
-        self.__all_duration = all_duration
         self.__shifts_start = shifts_start
         self.__shifts_end = shifts_end
         self.__all_minutes = all_minutes
@@ -234,9 +231,6 @@ class SolutionCollector(cp_model.CpSolverSolutionCallback):
         self.__start_time = time.time()
         self.__best_solution = -1e6
         self.__multiprocess_pipe = multiprocess_pipe
-        self.__sum_of_starts = sum_of_starts
-        self.__sum_of_ends = sum_of_ends
-        self.__sum_equal = sum_equals
 
     def on_solution_callback(self):
         self.__solution_count += 1
@@ -244,6 +238,7 @@ class SolutionCollector(cp_model.CpSolverSolutionCallback):
 
         if current_score > self.__best_solution:
             current_time = round(time.time() - self.__start_time, 2)
+            # Get the real and soft_constraints score components.
             score_real, score_constraints = compute_maximization_function_components(
                 self,
                 self.__shifts_state,
@@ -261,25 +256,6 @@ class SolutionCollector(cp_model.CpSolverSolutionCallback):
             print(
                 f"Solution found: {self.__solution_count} - {current_score}$ ({score_real}$ from real -{score_constraints}$ from soft constraints) - {current_time} seconds"
             )
-
-            # DEBUG
-            # for i in self.__all_minutes:
-            #     print(
-            #         i,
-            #         f"({self.Value(self.__shifts_state[(i, 0)])})",
-            #         self.Value(self.__shifts_start[(0, i)]),
-            #         self.Value(self.__shifts_end[(0, i)]),
-            #         f"ss {self.Value(self.__sum_of_starts[(0, i)])}",
-            #         f"se {self.Value(self.__sum_of_ends[(0, i)])}",
-            #         f"eq {self.Value(self.__sum_equal[(0, i)])}",
-            #         "----------",
-            #         f"({self.Value(self.__shifts_state[(i, 1)])})",
-            #         self.Value(self.__shifts_start[(1, i)]),
-            #         self.Value(self.__shifts_end[(1, i)]),
-            #         f"ss {self.Value(self.__sum_of_starts[(1, i)])}",
-            #         f"se {self.Value(self.__sum_of_ends[(1, i)])}",
-            #         f"eq {self.Value(self.__sum_equal[(1, i)])}",
-            #     )
 
             shifts_state_values = []
             for k, v in self.__shifts_state.items():

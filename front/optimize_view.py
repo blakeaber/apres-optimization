@@ -158,7 +158,8 @@ def check_for_execution(_):
             f"""The optimizer was cancelled or found an optimal solution
             Current stage: {data['stage']}
             Start time: {data["start_time"] or "-"}
-            End time: {data["end_time"] or "-"}""",
+            End time: {data["end_time"] or "-"}
+            Error message: {data["error_message"] or "-"}""",
             data,
         )
     else:
@@ -204,6 +205,7 @@ def display_current_solution(current_heartbeat):
     else:
         df_schedule = pd.DataFrame(columns=["start_time", "end_time", "vehicle"])
 
+    # GANTT chart
     schedule_fig = px.timeline(
         df_schedule, x_start="start_time", x_end="end_time", y="vehicle"
     )
@@ -211,6 +213,7 @@ def display_current_solution(current_heartbeat):
         autorange="reversed"
     )  # otherwise tasks are listed from the bottom up
 
+    # Vehicles over time chart
     fig = px.line(
         df_solution,
         x="time",
@@ -230,7 +233,7 @@ def display_current_solution(current_heartbeat):
         marker={"color": "red"},
     )
 
-    # Min shifts if present
+    # Include min shifts if present
     if "min_shifts" in df_solution:
         fig.add_scatter(
             x=df_solution["time"],
@@ -240,19 +243,31 @@ def display_current_solution(current_heartbeat):
             line={"color": "purple", "dash": "dash"},
         )
 
-    # Parameters
-    parameters_df = (
-        pd.DataFrame.from_dict(
-            current_heartbeat["payload"]["static_variables"], orient="index"
+    # Parameters table
+    if (
+        current_heartbeat["payload"]
+        and current_heartbeat["payload"]["static_variables"]
+    ):
+        parameters_df = (
+            pd.DataFrame.from_dict(
+                current_heartbeat["payload"]["static_variables"], orient="index"
+            )
+            .transpose()
+            .astype(str)
         )
-        .transpose()
-        .astype(str)
-    )
-    parameters_tables = [
-        dbc.Table.from_dataframe(parameters_df.iloc[:, :5], striped=True, size="sm"),
-        dbc.Table.from_dataframe(parameters_df.iloc[:, 5:10], striped=True, size="sm"),
-        dbc.Table.from_dataframe(parameters_df.iloc[:, 10:], striped=True, size="sm"),
-    ]
+        parameters_tables = [
+            dbc.Table.from_dataframe(
+                parameters_df.iloc[:, :5], striped=True, size="sm"
+            ),
+            dbc.Table.from_dataframe(
+                parameters_df.iloc[:, 5:10], striped=True, size="sm"
+            ),
+            dbc.Table.from_dataframe(
+                parameters_df.iloc[:, 10:], striped=True, size="sm"
+            ),
+        ]
+    else:
+        parameters_tables = []
 
     return html.Div(
         [
@@ -279,7 +294,7 @@ def display_current_solution(current_heartbeat):
     Input("solution-download-button", "n_clicks"),
     State("current-heartbeat", "data"),
 )
-def func(n_clicks, current_heartbeat):
+def download_solution_data(n_clicks, current_heartbeat):
     if not n_clicks:
         return dash.no_update
 
@@ -292,7 +307,7 @@ def func(n_clicks, current_heartbeat):
     Input("schedule-download-button", "n_clicks"),
     State("current-heartbeat", "data"),
 )
-def func(n_clicks, current_heartbeat):
+def download_scheduler_data(n_clicks, current_heartbeat):
     if not n_clicks:
         return dash.no_update
 

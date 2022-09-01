@@ -1,4 +1,3 @@
-
 import time
 import json
 import pandas as pd
@@ -10,19 +9,20 @@ from constraints import (
     shift_min_duration,
     shifts_contiguous,
     min_shifts_per_hour,
-    shift_span,
+    shift_start_and_end_behaviour,
     max_start_and_end,
     rush_hours,
-    market_hours
+    market_hours,
 )
 from auxiliary import (
-    define_shift_state, 
-    define_assigned_shifts, 
+    define_shift_state,
+    define_assigned_shifts,
     define_shifts_start,
     define_shifts_end,
     define_rush_hour,
-    define_completion_rate
+    define_completion_rate,
 )
+
 
 def compute_schedule(payload: dict):
     model = cp_model.CpModel()
@@ -70,27 +70,35 @@ def compute_schedule(payload: dict):
     t0 = time.time()
 
     # Define Auxiliary Variables
-    shifts_state = define_shift_state(model, all_days, all_hours, all_minutes, all_vehicles, all_duration)
+    shifts_state = define_shift_state(
+        model, all_days, all_hours, all_minutes, all_vehicles, all_duration
+    )
     assigned_shifts = define_assigned_shifts(model, all_vehicles, all_duration)
-    shifts_start = define_shifts_start(model, all_days, all_hours, all_minutes, all_vehicles)
-    shifts_end = define_shifts_end(model, all_days, all_hours, all_minutes, all_vehicles)
+    shifts_start = define_shifts_start(
+        model, all_days, all_hours, all_minutes, all_vehicles
+    )
+    shifts_end = define_shifts_end(
+        model, all_days, all_hours, all_minutes, all_vehicles
+    )
     rush_hour = define_rush_hour(model, all_hours, all_minutes, rush_hour_input)
 
     # Defining KPI Variable
     completion_rate = define_completion_rate(
-        model, 
-        all_days, 
-        all_hours, 
+        model,
+        all_days,
+        all_hours,
         all_minutes,
         all_vehicles,
-        all_duration, 
+        all_duration,
         num_vehicles,
         demand_input,
-        shifts_state
+        shifts_state,
     )
 
-    print(f'Time: {round(time.time() - t0, 2)} Seconds, {round((time.time() - t0) / 60, 2)} Minutes')
-    print(f'At: {utils.get_current_time()}')
+    print(
+        f"Time: {round(time.time() - t0, 2)} Seconds, {round((time.time() - t0) / 60, 2)} Minutes"
+    )
+    print(f"At: {utils.get_current_time()}")
     print("-- Defining Constraints --")
     t0 = time.time()
 
@@ -148,7 +156,7 @@ def compute_schedule(payload: dict):
 
     # # Constraint 5: Max amount of shifts that can start/end at the same time
     # Populate auxiliary variables
-    shift_span(
+    shift_start_and_end_behaviour(
         model,
         shifts_state,
         shifts_start,
@@ -196,8 +204,10 @@ def compute_schedule(payload: dict):
             all_duration,
         )
 
-    print(f'Time: {round(time.time() - t0, 2)} Seconds, {round((time.time() - t0) / 60, 2)} Minutes')
-    print(f'At: {utils.get_current_time()}')
+    print(
+        f"Time: {round(time.time() - t0, 2)} Seconds, {round((time.time() - t0) / 60, 2)} Minutes"
+    )
+    print(f"At: {utils.get_current_time()}")
     print("-- Setting Up Optimization Problem --")
     t0 = time.time()
 
@@ -217,20 +227,28 @@ def compute_schedule(payload: dict):
         )
     )
 
-    print(f'Time: {round(time.time() - t0, 2)} Seconds, {round((time.time() - t0) / 60, 2)} Minutes')
-    print(f'At: {utils.get_current_time()}')
+    print(
+        f"Time: {round(time.time() - t0, 2)} Seconds, {round((time.time() - t0) / 60, 2)} Minutes"
+    )
+    print(f"At: {utils.get_current_time()}")
     print("-- Solving Optimization Problem --")
     t0 = time.time()
 
     solver = cp_model.CpSolver()
-    solver.parameters.num_search_workers = 7  # this enables multi-core processing of the search space
-    solver.parameters.enumerate_all_solutions = False  # cannot enumerate all solutions when solving in parallel
+    solver.parameters.num_search_workers = (
+        7  # this enables multi-core processing of the search space
+    )
+    solver.parameters.enumerate_all_solutions = (
+        False  # cannot enumerate all solutions when solving in parallel
+    )
 
     # solver callback to display and record interim solutions from the solver (on the journey to optimal solutions)
     status = solver.Solve(model, utils.SolutionCollector(shifts_state))
 
-    print(f'Time: {round(time.time() - t0, 2)} Seconds, {round((time.time() - t0) / 60, 2)} Minutes')
-    print(f'At: {utils.get_current_time()}')
+    print(
+        f"Time: {round(time.time() - t0, 2)} Seconds, {round((time.time() - t0) / 60, 2)} Minutes"
+    )
+    print(f"At: {utils.get_current_time()}")
     print("-- Printing Solutions --")
 
     if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
@@ -242,7 +260,7 @@ def compute_schedule(payload: dict):
 if __name__ == "__main__":
 
     # Read app settings from file (must be "latest" settings via callback)
-    with open('./user_input/parameters.json', 'r') as f:
+    with open("./user_input/parameters.json", "r") as f:
         input_parameters = json.load(f)
 
     # Fixed parameters (based on daily optimization)
@@ -253,8 +271,8 @@ if __name__ == "__main__":
     input_parameters["duration_step"] = 15
 
     # Convert duration variables from hours to minutes
-    input_parameters['min_duration'] *= 60
-    input_parameters['max_duration'] *= 60
+    input_parameters["min_duration"] *= 60
+    input_parameters["max_duration"] *= 60
 
     # Read input files from folder
     # TODO: refactor and put into DataProvider object
@@ -264,24 +282,25 @@ if __name__ == "__main__":
     market_hours_input = pd.read_csv("./user_input/constraint_market_hours.csv")
 
     # Minimum Shifts: Convert to constraint format
-    input_parameters['minimum_shifts'] = {
+    input_parameters["minimum_shifts"] = {
         (c["day"], c["hour"], c["minute"]): int(c["min_shifts"])
         for _, c in minimum_shifts_input.iterrows()
     }
 
     # Rush Hours: Convert to constraint format
-    input_parameters['rush_hours'] = {
-        (c["hour"], c["minute"]): int(c["rush_hour"]) for _, c in rush_hours_input.iterrows()
+    input_parameters["rush_hours"] = {
+        (c["hour"], c["minute"]): int(c["rush_hour"])
+        for _, c in rush_hours_input.iterrows()
     }
 
     # Demand: Convert to constraint format
-    input_parameters['demand'] = {
+    input_parameters["demand"] = {
         (c["day"], c["hour"], c["minute"]): int(round(c["demand"]))
         for _, c in demand_input.iterrows()
     }
 
     # Market Hours: Convert to constraint format
-    input_parameters['market_hours'] = {
+    input_parameters["market_hours"] = {
         (c["day"], c["hour"], c["minute"]): int(round(c["open"]))
         for _, c in market_hours_input.iterrows()
     }

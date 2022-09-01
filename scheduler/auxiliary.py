@@ -61,6 +61,37 @@ def define_rush_hour(model, all_minutes, rush_hour_input):
     return rush_hour
 
 
+def define_sum_of_starts(model, all_minutes, all_vehicles):
+    """Auxiliary variable that holds the cumulative sum of starts over time"""
+    return {
+        (vehicle, minute): model.NewIntVar(
+            0, len(all_minutes), f"sum_of_starts_v{vehicle}_m{minute}"
+        )
+        for vehicle in all_vehicles
+        for minute in all_minutes
+    }
+
+
+def define_sum_of_ends(model, all_minutes, all_vehicles):
+    """Auxiliary variable that holds the cumulative sum of ends over time"""
+    return {
+        (vehicle, minute): model.NewIntVar(
+            0, len(all_minutes), f"sum_of_ends_v{vehicle}_m{minute}"
+        )
+        for vehicle in all_vehicles
+        for minute in all_minutes
+    }
+
+
+def define_sum_of_equals(model, all_minutes, all_vehicles):
+    """Auxiliary variable that holds if the starts & ends cumulative sums are equals"""
+    return {
+        (vehicle, minute): model.NewBoolVar(f"sum_of_ends_v{vehicle}_m{minute}")
+        for vehicle in all_vehicles
+        for minute in all_minutes
+    }
+
+
 def define_completion_rate(
     model,
     all_minutes,

@@ -8,6 +8,7 @@ def market_hours(
     all_vehicles,
     all_minutes,
 ):
+    """No shifts allowed during closed market hours"""
     for minute in all_minutes:
         for vehicle in all_vehicles:
             day, hour, r_minute = expand_minutes_into_components(minute)

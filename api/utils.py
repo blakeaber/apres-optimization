@@ -84,6 +84,6 @@ def solution_to_graph():
 
 if __name__ == "__main__":
     # files_to_dynamic_variables(
-    #     "/Users/jorge/Documents/dev/alto_app/scheduler/user_input"
+    #     ""
     # )
     solution_to_graph()

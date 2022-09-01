@@ -10,7 +10,7 @@ def max_start_and_end(
     max_starts_per_slot,
     max_ends_per_slot,
 ):
-    # The sum of starts and ends per slot can't be higher than the max
+    """The sum of starts and ends per slot can't be higher than the specified max"""
     for minute in all_minutes:
         starts = cp_model.LinearExpr.Sum(
             [
