@@ -90,7 +90,7 @@ def compute_schedule(heartbeat: HeartbeatStatus, multiprocess_pipe=None):
     # Rush Hours: Convert to constraint format
     if heartbeat.payload.dynamic_variables.rush_hours:
         rush_hour_input = {
-            (c["hour"], c["minute"]): int(c["rush_hour"])
+            (c["day"], c["hour"], c["minute"]): int(c["rush_hour"])
             for _, c in pd.read_json(
                 heartbeat.payload.dynamic_variables.rush_hours.json(), orient="split"
             ).iterrows()

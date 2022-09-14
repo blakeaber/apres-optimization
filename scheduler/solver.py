@@ -116,7 +116,7 @@ def define_maximization_function(
                     for driver in all_vehicles
                 ]
             )
-            * rush_hour_input[(hour, r_minutes)]
+            * rush_hour_input[(day, hour, r_minutes)]
             * rush_hour_soft_constraint_cost
         )
 
@@ -176,7 +176,7 @@ def compute_maximization_function_components(
         day, hour, r_minutes = expand_minutes_into_components(minute)
         return (
             sum(solver.Value(shifts_end[driver, minute]) for driver in all_vehicles)
-            * rush_hour_input[hour, r_minutes]
+            * rush_hour_input[(day, hour, r_minutes)]
             * rush_hour_soft_constraint_cost
         )
 

@@ -35,8 +35,9 @@ def _update_heartbeat_from_pipe(multiprocess_pipe):
                 heartbeat = data
             else:
                 break
-    except Exception:
-        heartbeat.set_error("The scheduler process was terminated.")
+    except Exception as e:
+        if heartbeat.stage_id != -1:
+            heartbeat.set_error("The scheduler process was terminated.")
         heartbeat.set_end_time()
     finally:
         multiprocess_pipe.close()

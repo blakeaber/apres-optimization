@@ -74,7 +74,9 @@ market_hours_jumbotron = dbc.Col(
     md=3,
 )
 
-rush_hours_df = pd.DataFrame(data=[[9, 0, 1]], columns=["hour", "minute", "rush_hour"])
+rush_hours_df = pd.DataFrame(
+    data=[[0, 9, 0, 1]], columns=["day", "hour", "minute", "rush_hour"]
+)
 rush_hours_table = dbc.Table.from_dataframe(rush_hours_df, striped=True, size="sm")
 rush_hours_jumbotron = dbc.Col(
     html.Div(

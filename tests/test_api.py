@@ -54,6 +54,7 @@ def test_output_not_init(mocker):
         "total_score": 0,
         "score_real": 0,
         "score_constraints": 0,
+        "scores_over_time": [],
         "error_message": None,
         "payload": {
             "run_id": "2878898c-263f-4a32-9c14-ff15b60f91e3",
@@ -137,3 +138,27 @@ def test_already_running_input(mocker):
     assert response.json() == {
         "detail": "Cannot start a scheduler run while a previous run is still running. Check `/heartbeat/`"
     }
+
+
+# def test_cancel_valid(mocker):
+#     """Tests that the healtcheck endpoint returns fine."""
+
+#     with open("./api/payloads/input.json", "r") as f:
+#         json_input = json.load(f)
+
+#     test_heartbeat = HeartbeatStatus()
+#     test_heartbeat.version = 1.8
+#     test_heartbeat.payload = OptimizerInput(**json_input)
+#     mocker.patch("api.main.heartbeat", return_value=test_heartbeat)
+#     mocker.patch("api.main.heartbeat.payload", return_value=test_heartbeat.payload)
+#     mocker.patch(
+#         "api.main.heartbeat.payload.run_id", return_value=test_heartbeat.payload.run_id
+#     )
+#     mocker.patch("api.main._current_scheduler_process", return_value=True)
+#     mocker.patch("api.main._current_scheduler_process.is_alive", return_value=True)
+#     mocker.patch("api.main._current_scheduler_process.kill", return_value=True)
+
+#     response = client.get("/cancel/2878898c-263f-4a32-9c14-ff15b60f91e3")
+
+#     assert response.status_code == 200
+#     assert response.json() == ["Scheduler execution terminated."]

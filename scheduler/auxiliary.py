@@ -54,7 +54,7 @@ def define_rush_hour(model, all_minutes, rush_hour_input):
         day, hour, r_minute = expand_minutes_into_components(minute)
         var = model.NewBoolVar(f"rush_hour_{minute}")
         rush_hour[minute] = var
-        if rush_hour_input[(hour, r_minute)]:
+        if rush_hour_input[(day, hour, r_minute)]:
             model.Add(var == 1)
         else:
             model.Add(var == 0)
