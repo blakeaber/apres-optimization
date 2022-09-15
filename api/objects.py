@@ -10,8 +10,8 @@ class StaticVariables(BaseModel):
 
     num_hours: int = 24
     num_vehicles: int = 20
-    min_duration: int = 4
-    max_duration: int = 10
+    min_duration: float = 4
+    max_duration: float = 10
     cost_vehicle_per_15min: int = 2
     revenue_passenger: int = 50
     max_starts_per_slot: int = 5

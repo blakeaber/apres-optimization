@@ -41,10 +41,10 @@ def compute_schedule(heartbeat: HeartbeatStatus, multiprocess_pipe=None):
     # Static Inputs
     num_hours = heartbeat.payload.static_variables.num_hours
     num_vehicles = heartbeat.payload.static_variables.num_vehicles
-    min_duration = (
+    min_duration = int(
         heartbeat.payload.static_variables.min_duration * 60
     )  # Convert to minutes
-    max_duration = (
+    max_duration = int(
         heartbeat.payload.static_variables.max_duration * 60
     )  # Convert to minutes
     cost_vehicle_per_minute = heartbeat.payload.static_variables.cost_vehicle_per_15min
