@@ -146,12 +146,12 @@ def compute_schedule(heartbeat: HeartbeatStatus, multiprocess_pipe=None):
         multiprocess_pipe.send(heartbeat)
     print("Defining Auxiliary Variables")
 
-    shifts_state = define_shift_state(model, all_minutes, all_vehicles)
     shifts_start = define_shifts_start(model, all_minutes, all_vehicles)
     shifts_end = define_shifts_end(model, all_minutes, all_vehicles)
     sum_of_starts = define_sum_of_starts(model, all_minutes, all_vehicles)
     sum_of_ends = define_sum_of_ends(model, all_minutes, all_vehicles)
     sum_equals = define_sum_of_equals(model, all_minutes, all_vehicles)
+    shifts_state = define_shift_state(model, all_minutes, all_vehicles)
 
     # Auxiliary variable - It will be used to define the objective function
     completion_rate = define_completion_rate(
