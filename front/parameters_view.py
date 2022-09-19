@@ -265,7 +265,7 @@ def on_save_params(
             "min_duration": min_shift,
             "max_duration": max_shift,
             "min_time_between_shifts": min_time_between_shifts,
-            "cost_vehicle_per_minute": vehicle_cost,
+            "cost_vehicle_per_15min": vehicle_cost,
             "revenue_passenger": trip_revenue,
             "max_starts_per_slot": depot_starts,
             "max_ends_per_slot": depot_ends,
