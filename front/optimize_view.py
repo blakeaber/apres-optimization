@@ -70,6 +70,9 @@ def run_script_onClick(n_clicks, button_state, heartbeat):
     # Static variables
     with open("./scheduler/user_input/parameters.json", "r") as f:
         payload["static_variables"] = json.load(f)
+        # FOR DEBUG - Allow to manually insert num_workers inside the parameters.json
+        if "num_workers" in payload["static_variables"]:
+            payload["num_workers"] = payload["static_variables"]["num_workers"]
 
     # Dynamic variables
     dynamic_variables = {}
