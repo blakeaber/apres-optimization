@@ -295,7 +295,7 @@ def compute_schedule(heartbeat: HeartbeatStatus, multiprocess_pipe=None):
     solver.parameters.enumerate_all_solutions = (
         False  # cannot enumerate all solutions when solving in parallel
     )
-    solver.parameters.search_branching = cp_model.FIXED_SEARCH
+    solver.parameters.search_branching = cp_model.LP_SEARCH
 
     # solver callback to display and record interim solutions from the solver (on the journey to optimal solutions)
     status = solver.Solve(
