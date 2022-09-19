@@ -271,6 +271,7 @@ def display_current_solution(current_heartbeat):
         parameters_tables = []
 
     # Scores over time table
+    scores_over_time_fig = go.Figure()
     if current_heartbeat["scores_over_time"]:
         scores_over_time_df = pd.DataFrame(
             current_heartbeat["scores_over_time"], columns=["real", "constraint"]
@@ -279,7 +280,6 @@ def display_current_solution(current_heartbeat):
             scores_over_time_df["real"] - scores_over_time_df["constraint"]
         )
         scores_over_time_df["constraint"] *= -1
-        scores_over_time_fig = go.Figure()
         scores_over_time_fig.add_trace(
             go.Scatter(
                 x=scores_over_time_df.index,

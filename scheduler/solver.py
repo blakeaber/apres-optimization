@@ -254,7 +254,8 @@ class SolutionCollector(cp_model.CpSolverSolutionCallback):
                 self.__minimum_shifts_soft_constraint_cost,
             )
             print(
-                f"Solution found: {self.__solution_count} - {current_score}$ ({score_real}$ from real -{score_constraints}$ from soft constraints) - {current_time} seconds"
+                f"Solution found: {self.__solution_count} - {current_score}$ ({score_real}$ from real -{score_constraints}$ from soft constraints) - {current_time} seconds",
+                flush=True,
             )
 
             shifts_state_values = []

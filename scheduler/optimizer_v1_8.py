@@ -144,7 +144,7 @@ def compute_schedule(heartbeat: HeartbeatStatus, multiprocess_pipe=None):
     heartbeat.set_stage(1)
     if multiprocess_pipe:
         multiprocess_pipe.send(heartbeat)
-    print("Defining Auxiliary Variables")
+    print("Defining Auxiliary Variables", flush=True)
 
     shifts_start = define_shifts_start(model, all_minutes, all_vehicles)
     shifts_end = define_shifts_end(model, all_minutes, all_vehicles)
@@ -167,7 +167,7 @@ def compute_schedule(heartbeat: HeartbeatStatus, multiprocess_pipe=None):
     heartbeat.set_stage(2)
     if multiprocess_pipe:
         multiprocess_pipe.send(heartbeat)
-    print("Defining Constraints")
+    print("Defining Constraints", flush=True)
 
     # Constraint #1
     # There must be at least one active state (i.e. one start)
@@ -253,7 +253,7 @@ def compute_schedule(heartbeat: HeartbeatStatus, multiprocess_pipe=None):
     heartbeat.set_stage(3)
     if multiprocess_pipe:
         multiprocess_pipe.send(heartbeat)
-    print("Constructing Optimization Problem")
+    print("Constructing Optimization Problem", flush=True)
 
     model.Maximize(
         define_maximization_function(
@@ -279,7 +279,7 @@ def compute_schedule(heartbeat: HeartbeatStatus, multiprocess_pipe=None):
     heartbeat.set_stage(4)
     if multiprocess_pipe:
         multiprocess_pipe.send(heartbeat)
-    print("Finding Solutions")
+    print("Finding Solutions", flush=True)
 
     solver = cp_model.CpSolver()
     solver.parameters.num_search_workers = (
@@ -311,11 +311,11 @@ def compute_schedule(heartbeat: HeartbeatStatus, multiprocess_pipe=None):
     )
 
     if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
-        print(f"Maximum of objective function: {solver.ObjectiveValue()}\n")
+        print(f"Maximum of objective function: {solver.ObjectiveValue()}\n", flush=True)
         sol_type = "Optimal" if status == cp_model.OPTIMAL else "Feasible"
         heartbeat.set_stage(5, f"Scheduler finished - {sol_type} solution found.")
     else:
-        print("No solution found.")
+        print("No solution found.", flush=True)
         heartbeat.set_stage(5, "Scheduler finished - No solution found.")
     heartbeat.set_end_time()
     if multiprocess_pipe:
