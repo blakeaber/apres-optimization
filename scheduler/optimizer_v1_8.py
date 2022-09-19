@@ -281,13 +281,21 @@ def compute_schedule(heartbeat: HeartbeatStatus, multiprocess_pipe=None):
         multiprocess_pipe.send(heartbeat)
     print("Finding Solutions", flush=True)
 
+    model.AddDecisionStrategy(
+        shifts_start.values(), cp_model.CHOOSE_FIRST, cp_model.SELECT_MAX_VALUE
+    )
+    model.AddDecisionStrategy(
+        shifts_end.values(), cp_model.CHOOSE_FIRST, cp_model.SELECT_MAX_VALUE
+    )
+
     solver = cp_model.CpSolver()
-    solver.parameters.num_search_workers = (
-        heartbeat.payload.num_search_workers
+    solver.parameters.num_workers = (
+        heartbeat.payload.num_workers
     )  # this enables multi-core processing of the search space
     solver.parameters.enumerate_all_solutions = (
         False  # cannot enumerate all solutions when solving in parallel
     )
+    solver.parameters.search_branching = cp_model.FIXED_SEARCH
 
     # solver callback to display and record interim solutions from the solver (on the journey to optimal solutions)
     status = solver.Solve(

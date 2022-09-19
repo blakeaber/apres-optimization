@@ -47,7 +47,7 @@ class OptimizerInput(BaseModel):
     """Object that holds all the inputs required by the scheduler to run and the run UUID"""
 
     run_id: str = "99999999-9999-9999-9999-999999999999"
-    num_search_workers: int = 4
+    num_workers: int = 4
     static_variables: StaticVariables
     dynamic_variables: DynamicVariables
 
