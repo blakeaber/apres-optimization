@@ -1,6 +1,6 @@
 fastapi==0.79.1
 numpy==1.23.0
-ortools==9.3.10497
+ortools==9.4.1874
 pandas==1.4.3
 pydantic==1.9.2
 pytest-mock==3.8.2
